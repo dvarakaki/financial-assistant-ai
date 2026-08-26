@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="description" content="AssessorIA — assistente inteligente para finanças e agenda" />
+  <title>AssessorIA — assistente</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <div class="console">
+
+    <header class="console__header">
+      <div class="brand">
+        <span class="brand__mark" aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M10 2L11.8 8.2L18 10L11.8 11.8L10 18L8.2 11.8L2 10L8.2 8.2L10 2Z" fill="currentColor"/>
+          </svg>
+          <span class="header__dot" id="status-dot" aria-hidden="true"></span>
+        </span>
+        <h1 class="brand__title">AssessorIA</h1>
+      </div>
+
+      <div class="header__meta">
+        <code class="header__session" id="session-id">—</code>
+
+        <div class="theme-switcher">
+          <button class="header__icon-btn" id="theme-toggle" type="button" aria-label="Mudar tema de fundo" title="Mudar tema de fundo" aria-haspopup="true" aria-expanded="false">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 21a9 9 0 1 1 0-18c4.97 0 9 3.58 9 8 0 2.21-1.79 3-3.5 3H16a1.5 1.5 0 0 0-1.06 2.56c.4.4.56.9.56 1.44 0 1.1-1.34 2-3 2Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+              <circle cx="7.5" cy="10.5" r="1.15" fill="currentColor"/>
+              <circle cx="11" cy="6.8" r="1.15" fill="currentColor"/>
+              <circle cx="15.5" cy="8" r="1.15" fill="currentColor"/>
+            </svg>
+          </button>
+          <div class="theme-menu" id="theme-menu" role="menu" hidden>
+            <button class="theme-swatch" data-theme="gemini" type="button" role="menuitem" title="Gemini"></button>
+            <button class="theme-swatch" data-theme="aurora" type="button" role="menuitem" title="Aurora"></button>
+            <button class="theme-swatch" data-theme="sunset" type="button" role="menuitem" title="Sunset"></button>
+          </div>
+        </div>
+
+        <button class="header__reset" id="reset-session" type="button" title="Encerrar a sessão atual e começar uma nova">
+          Nova conversa
+        </button>
+      </div>
+    </header>
+
+    <main class="console__thread" id="thread" aria-live="polite">
+      <div class="thread__empty" id="thread-empty">
+        <div class="empty__icon" aria-hidden="true">
+          <svg width="24" height="24" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M10 2L11.8 8.2L18 10L11.8 11.8L10 18L8.2 11.8L2 10L8.2 8.2L10 2Z" fill="currentColor"/>
+          </svg>
+        </div>
+        <p class="empty__title">Como posso ajudar?</p>
+        <p class="empty__text">Pergunte sobre gastos, saldo ou compromissos na agenda.</p>
+      </div>
+    </main>
+
+    <form class="console__composer" id="composer" autocomplete="off">
+      <textarea
+        class="composer__input"
+        id="pergunta"
+        placeholder="Escreva uma mensagem…"
+        rows="1"
+        required
+      ></textarea>
+      <button type="submit" class="composer__send" id="enviar" aria-label="Enviar pergunta">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M8 12.5V3.5M8 3.5L4.2 7.3M8 3.5L11.8 7.3" stroke="white" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </form>
+
+    <p class="console__hint" id="hint"></p>
+    <p class="console__disclaimer">AssessorIA pode cometer erros. Confirme informações importantes antes de decidir.</p>
+  </div>
+
+  <script src="theme.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+# API
+fastapi
+uvicorn[standard]
+pydantic
+
+# Essenciais
+python-dotenv
+typing-extensions
+
+# Banco de Dados
+psycopg2-binary
+pymongo
+
+# LangChain e Integrações
+langchain
+langchain-community
+langchain-core
+langchain-groq
+langchain-google-genai
+langchain-text-splitters
+
+# Processamento de PDF
+pypdf
+
+# Vetorização e Busca (FAISS)
+faiss-cpu
