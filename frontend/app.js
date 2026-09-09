@@ -114,6 +114,22 @@ function escaparHtml(texto) {
   return div.innerHTML;
 }
 
+// Converte um subconjunto simples de Markdown (o que o LLM costuma usar:
+// negrito, itálico, código inline, links e quebras de linha) em HTML.
+// O texto é escapado primeiro, então o HTML inserido depois vem só das tags
+// que a própria função adiciona — não há risco de XSS vindo da resposta do modelo.
+function markdownParaHtml(texto) {
+  let html = escaparHtml(texto);
+
+  html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
+  html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  html = html.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, "<em>$1</em>");
+  html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+  html = html.replace(/\n/g, "<br>");
+
+  return html;
+}
+
 function rolarParaFinal() {
   thread.scrollTop = thread.scrollHeight;
 }
@@ -131,7 +147,7 @@ function adicionarMensagem({ tipo, texto, agentes }) {
 
   const bubble = document.createElement("div");
   bubble.className = "message__bubble";
-  bubble.innerHTML = escaparHtml(texto);
+  bubble.innerHTML = tipo === "assistant" ? markdownParaHtml(texto) : escaparHtml(texto);
   wrapper.appendChild(bubble);
 
   if (agentes && agentes.length > 0) {

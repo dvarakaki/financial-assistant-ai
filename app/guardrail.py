@@ -15,7 +15,6 @@ PII = [
     ("CPF",      r"\d{3}\.?\d{3}\.?\d{3}-?\d{2}"),
     ("CNPJ",     r"\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}"),
     ("TELEFONE", r"\(?\d{2}\)?\s?\d{4,5}-?\d{4}"),
-    ("EMAIL",    r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+"),
     ("CONTA",    r"\d{4,6}-\d{1}"),
     ("CARTAO",   r"\d{4}\s?\d{4}\s?\d{4}\s?\d{4}"),
 ]
@@ -24,6 +23,7 @@ PII = [
 # HELPERS
 # ==============================================================================
 def _bloquear(motivo, mensagem):
+    
     return {"bloqueado": True, "motivo": motivo, "mensagem": mensagem}
 
 def _aprovado():
@@ -92,11 +92,11 @@ CATEGORIA: [categoria]
 JUSTIFICATIVA: [uma linha]
 
 Categorias:
-APROVADO        - mensagem legítima sobre finanças (informativa), agenda ou operações
-OFENSIVO        - xingamentos, assédio, discurso de ódio
-PERIGOSO        - instruções que causam dano físico, psicológico ou coletivo
-ILICITO         - pedido de auxílio para atividades ilegais ou fraudulentas
-POLITICO        - opiniões ou debates políticos, partidos, eleições
+APROVADO         - mensagem legítima sobre finanças (informativa), agenda ou operações
+OFENSIVO         - xingamentos, assédio, discurso de ódio
+PERIGOSO         - instruções que causam dano físico, psicológico ou coletivo
+ILICITO          - pedido de auxílio para atividades ilegais ou fraudulentas
+POLITICO         - opiniões ou debates políticos, partidos, eleições
 INDICACAO_INVEST - recomendação direta de ativo específico para comprar/vender/manter
 
 Mensagem: {mensagem}

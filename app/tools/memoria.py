@@ -7,20 +7,6 @@ from langchain_core.runnables import RunnableConfig
 
 from app.memory import recuperar_historico
 
-# ==============================================================================
-# POR QUE user_id E NÃO session_id
-# ------------------------------------------------------------------------------
-# O front gera um UUID novo a cada "nova sessão". Esse UUID identifica a
-# CONVERSA, não a pessoa. Se buscarmos conversas anteriores por ele, o
-# resultado é sempre vazio: cada conversa tem um id diferente da anterior.
-#
-# Para achar o passado precisamos de um identificador ESTÁVEL do usuário —
-# o user_id. Enquanto o front não mandar um separado, o fallback para o
-# próprio session_id (aqui repassado como thread_id) mantém a tool
-# funcionando, e é o suficiente para testar com um id fixo à mão (ex.: pelo
-# /docs, usando sempre o mesmo session_id nas duas conversas).
-# ==============================================================================
-
 
 @tool
 def buscar_historico(busca: str, config: RunnableConfig) -> str:
@@ -29,7 +15,8 @@ def buscar_historico(busca: str, config: RunnableConfig) -> str:
     Use SOMENTE quando a resposta depende de algo dito numa conversa passada
     — preferências, decisões ou planos que o usuário mencionou antes.
     NÃO use para dados que estão no banco (gastos, saldos, eventos): para isso
-    já existem as tools de consulta específicas do especialista.
+    já existem as tools de consulta específicas como query_transactions,
+    total_balance, daily_balance.
 
     Args:
         busca: assunto a procurar nos resumos das conversas anteriores.
@@ -45,9 +32,15 @@ def buscar_historico(busca: str, config: RunnableConfig) -> str:
     if not historico:
         return "Nenhuma conversa anterior relevante encontrada."
 
-    return "\n\n".join(
-        f"[{h['iniciada_em']:%d/%m/%Y}] {h['resumo']}" for h in historico
-    )
+    linhas = []
+    for h in historico:
+        data = h["iniciada_em"]
+        if hasattr(data, "strftime"):
+            data_fmt = data.strftime("%d/%m/%Y")
+        else:
+            data_fmt = str(data)[:10]
+        linhas.append(f"[{data_fmt}] {h['resumo']}")
+    return "\n\n".join(linhas)
 
 
 TOOLS_MEMORIA = [buscar_historico]

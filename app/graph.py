@@ -106,37 +106,25 @@ def _responder(rota: str, pergunta: str, config: dict) -> str:
         ))
     return resposta
 
+def executar_fluxo_assessor(
+    pergunta_usuario: str, session_id: str, user_id: str = "usuario_teste"
+) -> str:
+    pergunta_usuario_anonimizado, mapa_pii = anonimizar_entrada(pergunta_usuario)
 
-def executar_fluxo_assessor(pergunta_usuario: str, session_id: str) -> dict:
-    """Recebe a pergunta do usuário e retorna o payload da resposta da API."""
-    pergunta, mapa_pii = anonimizar_entrada(pergunta_usuario)
-    entrada = guardrail_entrada(pergunta)
-    if entrada["bloqueado"]:
-        return {
-            "resposta": entrada["mensagem"],
-            "agentes_chamados": [f"guardrail_entrada:{entrada['motivo']}"],
-        }
+    verificacao = guardrail_entrada(pergunta_usuario_anonimizado)
+    if verificacao["bloqueado"]:
+        resposta = verificacao["mensagem"]
+        salvar_mensagem(session_id, "human",     pergunta_usuario_anonimizado, user_id=user_id)
+        salvar_mensagem(session_id, "assistant", resposta, user_id=user_id)
+        return resposta
 
-    # Grava a versão ANONIMIZADA da pergunta — é por isso que isto acontece
-    # aqui, depois do guardrail de entrada, e não em memory.py sozinho.
-    salvar_mensagem(session_id, "usuario", pergunta)
+    config = {"configurable": {"thread_id": session_id, "user_id": user_id}}
+    rota, resposta_direta = _identificar_rota(pergunta_usuario, config)
+    resposta = resposta_direta if rota == "direta" else _responder(rota, pergunta_usuario, config)
 
-    # user_id ainda não existe no front (limitação conhecida desta etapa): o
-    # buscar_historico recebe o próprio session_id nas duas chaves, então a
-    # busca funciona enquanto o id não mudar entre conversas.
-    config = {"configurable": {"user_id": session_id, "thread_id": session_id}}
+    resposta = guardrail_saida(resposta, mapa_pii)["conteudo"]
 
-    rota, resposta_direta = _identificar_rota(pergunta, config)
-    agentes = ["guardrail_entrada", "roteador"]
-    if rota == "direta":
-        resposta = resposta_direta
-    else:
-        resposta = _responder(rota, pergunta, config)
-        agentes.append(rota)
+    salvar_mensagem(session_id, "human",     pergunta_usuario_anonimizado, user_id=user_id)
+    salvar_mensagem(session_id, "assistant", resposta, user_id=user_id)
 
-    resposta_final = guardrail_saida(resposta, mapa_pii)
-    agentes.append("guardrail_saida")
-
-    salvar_mensagem(session_id, "assistente", resposta_final["conteudo"])
-
-    return {"resposta": resposta_final["conteudo"], "agentes_chamados": agentes}
+    return resposta

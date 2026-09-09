@@ -5,32 +5,24 @@ from langchain_community.vectorstores import FAISS
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from app.config import FAQ_PDF_PATH, GEMINI_API_KEY
 
+from langchain.tools import tool
+from app.vectorstore import qdrant, gerar_embedding, COLLECTION_FAQ
+
+
 @tool
 def faq_retriever(question: str) -> str:
-    """
-    Lê o arquivo pdf e retorna a resposta para o usúario.
-    """
-    # le o pdf
-    loader = PyPDFLoader(FAQ_PDF_PATH)
-    docs = loader.load()
+    """Busca no FAQ oficial os trechos mais relevantes para responder a pergunta."""
+    vetor = gerar_embedding(question)
 
-    # normaliza os caracteres e prerapa o texto
-    splitter = RecursiveCharacterTextSplitter(chunk_size=700, chunk_overlap=150)
-    chuncks = splitter.split_documents(docs)
-    
-    # converte as chunks em um vetor numerico
-    embeddings = GoogleGenerativeAIEmbeddings(
-        model="gemini-embedding-2-preview",
-        google_api_key=GEMINI_API_KEY
+    resultados = qdrant.query_points(
+        collection_name=COLLECTION_FAQ,
+        query=vetor,
+        limit=6,
     )
-     
-    # armazena os vetores em um indice que busca por similaridade
-    db = FAISS.from_documents(chuncks, embeddings)
- 
-    # busca a pergunta do usuario na rede por similaridade, e pega os seis mais similares
-    results = db.similarity_search(question, k=2)
 
-    print(results)
+    if not resultados.points:
+        return "Nenhum trecho relevante encontrado no FAQ."
 
-    contexto = "\n\n".join([doc.page_content for doc in results])
-    return contexto
+    return "\n\n".join(
+        ponto.payload["page_content"] for ponto in resultados.points
+    )
