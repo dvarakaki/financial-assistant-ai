@@ -19,6 +19,7 @@ from app.prompts import (
 from app.tools.faq import faq_retriever
 from app.tools.financeiro import TOOLS
 from app.tools.memoria import TOOLS_MEMORIA
+from app.tools.perfil import TOOLS_PERFIL
 
 
 # create_agent executa o ciclo: modelo -> chamada de tool -> resposta final.
@@ -48,7 +49,7 @@ router_agent = create_agent(
 )
 financeiro_agent = create_agent(
     model=llm_especialista,
-    tools=TOOLS + TOOLS_MEMORIA,
+    tools=TOOLS + TOOLS_MEMORIA + TOOLS_PERFIL,
     system_prompt=FINANCEIRO_PROMPT_COMPLETO,
 )
 agenda_agent = create_agent(
