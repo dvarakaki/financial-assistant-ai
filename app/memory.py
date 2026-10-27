@@ -35,7 +35,7 @@ from app.llms import llm_rapido
 from pymongo import MongoClient
 from qdrant_client import models
 from app.config import MONGODB_URI
-from app.vectorstore import qdrant, gerar_embedding, COLLECTION_MEMORIA
+from app.infra.vectorstore import qdrant, gerar_embedding, COLLECTION_MEMORIA
 
 _mongo      = MongoClient(MONGODB_URI)
 db          = _mongo["assessor"]

@@ -1,14 +1,8 @@
-import psycopg2
 from typing import Optional, List
 from langchain.tools import tool
 from pydantic import BaseModel, Field
 
-from app.config import DATABASE_URL
-
-def get_conn():
-    if not DATABASE_URL:
-        raise RuntimeError("DATABASE_URL não foi configurada nas variáveis de ambiente.")
-    return psycopg2.connect(DATABASE_URL)
+from app.infra.db import get_conn
 
 
 class AddTransactionArgs(BaseModel):

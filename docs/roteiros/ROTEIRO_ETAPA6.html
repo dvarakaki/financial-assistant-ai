@@ -1,0 +1,2222 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Etapa 6 — Observabilidade e a tela de monitoramento</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #050a14;
+  --cyan: #00e5ff;
+  --green: #00ff88;
+  --orange: #ff6b35;
+  --purple: #7c3aed;
+  --pink: #f472b6;
+  --text: #e8f4f8;
+  --muted: #7fa8c0;
+  --card: rgba(255,255,255,0.04);
+  --border: rgba(0,229,255,0.15);
+}
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+html, body { width:100%; height:100%; overflow:hidden; background:var(--bg); color:var(--text); font-family:'IBM Plex Sans',sans-serif; }
+
+#bg { position:fixed; inset:0; z-index:0; opacity:.3; pointer-events:none; }
+
+#progress-bar {
+  position:fixed; top:0; left:0; height:3px; z-index:200;
+  background:linear-gradient(90deg, var(--cyan), var(--purple));
+  transition: width .4s ease;
+}
+
+#topbar {
+  position:fixed; top:0; left:0; right:0; height:52px; z-index:150;
+  background:rgba(5,10,20,.88); backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--border);
+  display:flex; align-items:center; justify-content:space-between; padding:0 32px;
+}
+.tb-label { font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--cyan); letter-spacing:2px; text-transform:uppercase; }
+.tb-counter { font-family:'IBM Plex Mono',monospace; font-size:13px; color:var(--muted); }
+.tb-title { font-family:'IBM Plex Sans',sans-serif; font-size:13px; color:var(--muted); max-width:360px; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+#slides { position:fixed; inset:0; z-index:1; }
+
+.slide {
+  position:absolute; inset:0;
+  display:flex; flex-direction:column; justify-content:flex-start; align-items:center;
+  padding:72px 60px 80px;
+  opacity:0; pointer-events:none;
+  transition: opacity .5s ease, transform .5s ease;
+  transform: translateX(60px);
+  overflow-y: auto;
+}
+.slide.active { opacity:1; pointer-events:all; transform:translateX(0); }
+.slide.prev   { opacity:0; pointer-events:none; transform:translateX(-60px); }
+.slide-inner { width:100%; max-width:1080px; margin:auto 0; }
+
+#nav-prev, #nav-next {
+  position:fixed; top:50%; z-index:200;
+  transform:translateY(-50%);
+  width:48px; height:48px; border-radius:50%;
+  border:1px solid var(--border); background:rgba(5,10,20,.7);
+  backdrop-filter:blur(8px); cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  font-size:20px; color:var(--cyan);
+  transition:all .2s; user-select:none;
+}
+#nav-prev { left:16px; }
+#nav-next { right:16px; }
+#nav-prev:hover, #nav-next:hover { background:rgba(0,229,255,.12); border-color:var(--cyan); }
+#nav-prev.disabled, #nav-next.disabled { opacity:.25; pointer-events:none; }
+
+#dots { position:fixed; bottom:18px; left:50%; transform:translateX(-50%); display:flex; gap:6px; z-index:200; flex-wrap:wrap; max-width:70%; justify-content:center; }
+.dot { width:7px; height:7px; border-radius:50%; background:var(--muted); opacity:.4; cursor:pointer; transition:all .3s; }
+.dot.active { background:var(--cyan); opacity:1; transform:scale(1.3); }
+.dot.done { background:var(--green); opacity:.8; }
+
+.tag  { font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--cyan);   letter-spacing:3px; text-transform:uppercase; margin-bottom:10px; display:block; }
+.gtag { font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--green);  letter-spacing:3px; text-transform:uppercase; margin-bottom:10px; display:block; }
+.ptag { font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--purple); letter-spacing:3px; text-transform:uppercase; margin-bottom:10px; display:block; }
+.otag { font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--orange); letter-spacing:3px; text-transform:uppercase; margin-bottom:10px; display:block; }
+
+h1.hero-title { font-family:'Syne',sans-serif; font-size:clamp(2.2rem,4.6vw,4rem); font-weight:800; line-height:1.08; margin-bottom:20px; }
+h2.sec-title  { font-family:'Syne',sans-serif; font-size:clamp(1.4rem,3vw,2.3rem); font-weight:800; line-height:1.18; margin-bottom:12px; }
+h3.slide-h3   { font-family:'Syne',sans-serif; font-size:1.15rem; font-weight:700; margin-bottom:14px; }
+p.lead { color:var(--muted); font-size:.98rem; line-height:1.7; margin-bottom:22px; }
+
+.badge {
+  display:inline-flex; align-items:center; gap:8px;
+  background:rgba(0,229,255,.08); border:1px solid var(--border);
+  border-radius:20px; padding:6px 16px;
+  font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--cyan); letter-spacing:1px;
+  margin-bottom:26px; width:fit-content;
+}
+.badge::before { content:''; width:7px; height:7px; background:var(--green); border-radius:50%; animation:pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.5)} }
+
+.hero-q {
+  background:linear-gradient(135deg,rgba(0,229,255,.06),rgba(124,58,237,.06));
+  border:1px solid rgba(0,229,255,.2); border-left:4px solid var(--cyan);
+  border-radius:12px; padding:20px 26px; font-size:1.02rem; color:var(--text);
+  max-width:780px; margin-top:6px;
+  animation:fadeUp .8s ease both .3s;
+}
+@keyframes fadeUp { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:translateY(0)} }
+
+.card { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:22px; }
+.g2 { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+.g3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px; }
+@media(max-width:680px){.g2,.g3{grid-template-columns:1fr}}
+
+.pill-row { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:24px; }
+.pill { background:rgba(0,255,136,.07); border:1px solid rgba(0,255,136,.25); border-radius:20px; padding:5px 14px; font-size:12px; color:var(--green); font-family:'IBM Plex Mono',monospace; }
+
+.bridge { background:linear-gradient(135deg,rgba(0,229,255,.05),rgba(124,58,237,.05)); border:1px solid rgba(0,229,255,.2); border-radius:14px; padding:22px 26px; }
+
+/* ═══ MARCADOR DE BLOCO ═══ */
+.bloco-mark {
+  display:inline-flex; align-items:center; gap:10px; margin-bottom:14px;
+  font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:2.5px; text-transform:uppercase;
+  border-radius:20px; padding:5px 15px;
+}
+.bl-a { background:rgba(0,229,255,.09);  border:1px solid rgba(0,229,255,.35);  color:var(--cyan); }
+.bl-b { background:rgba(255,107,53,.09); border:1px solid rgba(255,107,53,.35); color:var(--orange); }
+.bl-c { background:rgba(0,255,136,.08);  border:1px solid rgba(0,255,136,.32);  color:var(--green); }
+
+/* ═══ TABELA ═══ */
+.tbl { width:100%; border-collapse:collapse; font-size:.82rem; }
+.tbl th { text-align:left; font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:1.5px; text-transform:uppercase; color:var(--cyan); padding:9px 12px; border-bottom:1px solid var(--border); white-space:nowrap; }
+.tbl td { padding:10px 12px; border-bottom:1px solid rgba(255,255,255,.05); color:var(--muted); vertical-align:top; line-height:1.5; }
+.tbl td strong, .tbl td code { color:var(--text); }
+.tbl td code { font-family:'IBM Plex Mono',monospace; background:rgba(0,0,0,.3); padding:1px 6px; border-radius:4px; font-size:.78rem; }
+.tbl tbody tr:hover td { background:rgba(0,229,255,.03); }
+.tbl tr.sep-a td { background:rgba(0,229,255,.05); }
+.tbl tr.sep-b td { background:rgba(255,107,53,.05); }
+.tbl tr.sep-c td { background:rgba(0,255,136,.04); }
+
+/* ═══ CÓDIGO ═══ */
+.code {
+  background:rgba(0,0,0,.42); border:1px solid var(--border); border-radius:10px;
+  padding:14px 18px; font-family:'IBM Plex Mono',monospace; font-size:.74rem;
+  line-height:1.7; overflow-x:auto; white-space:pre; color:#bfe4f2;
+}
+.code .k { color:var(--pink); }
+.code .s { color:var(--green); }
+.code .c { color:var(--muted); font-style:italic; }
+.code .h { color:var(--cyan); font-weight:500; }
+.code .o { color:var(--orange); }
+.code .del { color:#ff8fa3; }
+
+.code-wrap { border:1px solid var(--border); border-radius:9px; overflow:hidden; margin-bottom:14px; transition:border-color .2s, box-shadow .2s; }
+.code-wrap.open { border-color:var(--cyan); box-shadow:0 0 0 1px rgba(0,229,255,.08); }
+.code-header { display:flex; justify-content:space-between; align-items:center; padding:9px 14px; background:rgba(0,0,0,.55); border-bottom:1px solid var(--border); cursor:pointer; user-select:none; transition:background .15s; gap:12px; }
+.code-header:hover { background:rgba(0,229,255,.06); }
+.code-header .fname { font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--cyan); }
+.code-right { display:flex; align-items:center; gap:10px; flex-shrink:0; }
+.code-header .lbadge { font-family:'IBM Plex Mono',monospace; font-size:9.5px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; }
+.code-toggle-btn {
+  font-family:'IBM Plex Mono',monospace; font-size:9.5px; letter-spacing:.5px;
+  color:var(--cyan); border:1px solid var(--border); border-radius:20px; padding:3px 11px;
+  white-space:nowrap; transition:.2s; background:rgba(0,229,255,.05);
+}
+.code-toggle-btn::before { content:'▸ '; }
+.code-wrap.open .code-toggle-btn { color:var(--bg); background:var(--green); border-color:var(--green); font-weight:600; }
+.code-wrap.open .code-toggle-btn::before { content:'▾ '; }
+.copy-btn {
+  font-family:'IBM Plex Mono',monospace; font-size:9.5px; letter-spacing:.5px;
+  color:var(--purple); border:1px solid rgba(124,58,237,.4); border-radius:20px; padding:3px 11px;
+  white-space:nowrap; transition:.2s; background:rgba(124,58,237,.08); cursor:pointer;
+  display:none;
+}
+.copy-btn:hover { background:rgba(124,58,237,.2); color:var(--pink); }
+.copy-btn.done { color:var(--bg); background:var(--green); border-color:var(--green); font-weight:600; }
+.code-wrap.open .copy-btn { display:inline-block; }
+.code-wrap .code { display:none; border:none; border-radius:0; }
+.code-wrap.open .code { display:block; animation:codeIn .28s ease; }
+@keyframes codeIn { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
+
+/* ═══ PASSOS ═══ */
+.step-marker { display:flex; align-items:center; gap:16px; margin-bottom:18px; }
+.step-num {
+  font-family:'Syne',sans-serif; font-weight:800; font-size:1.6rem;
+  width:52px; height:52px; border-radius:14px; display:flex; align-items:center; justify-content:center;
+  background:rgba(0,229,255,.08); border:1px solid var(--border); color:var(--cyan); flex-shrink:0;
+}
+.step-num.b { background:rgba(255,107,53,.08); border-color:rgba(255,107,53,.3); color:var(--orange); }
+.step-num.c { background:rgba(0,255,136,.07); border-color:rgba(0,255,136,.3); color:var(--green); }
+.step-meta { display:flex; flex-direction:column; gap:2px; }
+.step-file { font-family:'IBM Plex Mono',monospace; font-size:.92rem; color:var(--text); }
+.step-obj { font-size:.78rem; color:var(--muted); }
+
+.callout { border-left:3px solid; border-radius:0 8px 8px 0; padding:12px 16px; margin:12px 0 0; font-size:.83rem; line-height:1.6; }
+.callout .ct { font-family:'IBM Plex Mono',monospace; font-weight:500; font-size:9.5px; text-transform:uppercase; letter-spacing:1.5px; margin-bottom:5px; }
+.callout p { margin:0; color:var(--muted); font-size:.83rem; }
+.callout p + p { margin-top:8px; }
+.callout code { font-family:'IBM Plex Mono',monospace; background:rgba(0,0,0,.3); padding:1px 6px; border-radius:4px; color:var(--text); font-size:.78rem; }
+.co-ok   { border-color:var(--green);  background:rgba(0,255,136,.05); }
+.co-ok .ct { color:var(--green); }
+.co-warn { border-color:var(--orange); background:rgba(255,107,53,.05); }
+.co-warn .ct { color:var(--orange); }
+.co-info { border-color:var(--purple); background:rgba(124,58,237,.06); }
+.co-info .ct { color:#c4b5fd; }
+.co-err  { border-color:#ff4d6d; background:rgba(255,77,109,.06); }
+.co-err .ct { color:#ff8fa3; }
+
+/* ═══ TESTES ═══ */
+.test-box { background:rgba(0,255,136,.04); border:1px solid rgba(0,255,136,.22); border-radius:12px; padding:16px 20px; margin-bottom:12px; }
+.test-box .tt { font-family:'Syne',sans-serif; font-weight:800; font-size:.88rem; color:var(--green); margin-bottom:8px; display:flex; align-items:center; gap:8px; }
+.test-box ol, .test-box ul { margin-left:18px; }
+.test-box li { font-size:.83rem; color:var(--muted); line-height:1.65; margin-bottom:4px; }
+.test-box li strong, .test-box li code { color:var(--text); }
+.test-box code { font-family:'IBM Plex Mono',monospace; background:rgba(0,0,0,.3); padding:1px 6px; border-radius:4px; font-size:.78rem; }
+.test-box p { font-size:.83rem; color:var(--muted); line-height:1.65; }
+
+/* ═══ TESTE CONVERSACIONAL (pergunta → resposta esperada) ═══ */
+.qa { width:100%; border-collapse:collapse; font-size:.82rem; margin-top:8px; }
+.qa th { text-align:left; font-family:'IBM Plex Mono',monospace; font-size:9.5px; letter-spacing:1.5px; text-transform:uppercase; color:var(--green); padding:8px 10px; border-bottom:1px solid rgba(0,255,136,.25); }
+.qa td { padding:10px; border-bottom:1px solid rgba(255,255,255,.06); color:var(--muted); vertical-align:top; line-height:1.55; font-size:.82rem; }
+.qa td.n { color:var(--green); font-family:'IBM Plex Mono',monospace; width:26px; text-align:center; }
+.qa tr:last-child td { border-bottom:none; }
+.voce {
+  color:var(--text); font-family:'IBM Plex Mono',monospace; font-size:.78rem;
+  background:rgba(0,229,255,.08); border:1px solid rgba(0,229,255,.22);
+  border-radius:6px; padding:3px 9px; display:inline-block; line-height:1.45;
+}
+.acao { color:var(--text); font-size:.8rem; }
+.qa .ok  { color:var(--green); font-weight:500; }
+.qa .nao { color:var(--orange); font-weight:500; }
+.qa code { font-family:'IBM Plex Mono',monospace; background:rgba(0,0,0,.3); padding:1px 6px; border-radius:4px; color:var(--text); font-size:.76rem; }
+
+/* ═══ CHECKLIST ANIMADA ═══ */
+.final-check { display:flex; flex-direction:column; gap:8px; margin-bottom:18px; }
+.fc-item {
+  display:flex; align-items:center; gap:12px; padding:9px 16px;
+  background:var(--card); border:1px solid var(--border); border-radius:10px;
+  opacity:0; transform:translateX(-16px);
+}
+.final-check.play .fc-item { animation:fcIn .5s ease forwards; }
+.final-check.play .fc-item:nth-child(1){animation-delay:.04s}
+.final-check.play .fc-item:nth-child(2){animation-delay:.14s}
+.final-check.play .fc-item:nth-child(3){animation-delay:.24s}
+.final-check.play .fc-item:nth-child(4){animation-delay:.34s}
+.final-check.play .fc-item:nth-child(5){animation-delay:.44s}
+.final-check.play .fc-item:nth-child(6){animation-delay:.54s}
+.final-check.play .fc-item:nth-child(7){animation-delay:.64s}
+.final-check.play .fc-item:nth-child(8){animation-delay:.74s}
+.final-check.play .fc-item:nth-child(9){animation-delay:.84s}
+.final-check.play .fc-item:nth-child(10){animation-delay:.94s}
+.final-check.play .fc-item:nth-child(11){animation-delay:1.04s}
+.final-check.play .fc-item:nth-child(12){animation-delay:1.14s}
+.final-check.play .fc-item:nth-child(13){animation-delay:1.24s}
+.final-check.play .fc-item:nth-child(14){animation-delay:1.34s}
+@keyframes fcIn { to{opacity:1;transform:translateX(0)} }
+.fc-check { width:20px; height:20px; border-radius:50%; border:1px solid var(--green); color:var(--green); flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:11px; }
+.fc-text { font-size:.82rem; color:var(--text); font-family:'IBM Plex Mono',monospace; }
+
+/* ═══ ANTES / DEPOIS ═══ */
+.yn { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+@media(max-width:680px){ .yn{ grid-template-columns:1fr; } }
+.yn-col { border-radius:14px; padding:18px 20px; }
+.yn-yes { background:rgba(0,255,136,.05); border:1px solid rgba(0,255,136,.22); }
+.yn-no  { background:rgba(255,107,53,.05); border:1px solid rgba(255,107,53,.22); }
+.yn-col h4 { font-family:'Syne',sans-serif; font-size:.92rem; margin-bottom:12px; }
+.yn-col li { list-style:none; font-size:.82rem; color:var(--muted); line-height:1.55; padding:5px 0 5px 20px; position:relative; }
+.yn-yes li::before { content:'✓'; position:absolute; left:0; color:var(--green); }
+.yn-no  li::before { content:'✕'; position:absolute; left:0; color:var(--orange); }
+
+.next-pills { display:flex; flex-wrap:wrap; gap:10px; }
+.next-pill { font-family:'IBM Plex Mono',monospace; font-size:11.5px; padding:8px 15px; border-radius:20px; background:rgba(124,58,237,.08); border:1px solid rgba(124,58,237,.3); color:var(--pink); }
+
+.slide-scroll { overflow-y:auto; }
+.divider { height:1px; background:var(--border); margin:18px 0; }
+
+code.inline { font-family:'IBM Plex Mono',monospace; color:var(--cyan); background:rgba(0,229,255,.06); padding:1px 7px; border-radius:5px; font-size:.86em; }
+
+/* ═══ CICLO DE VIDA ═══ */
+.ciclo { display:flex; align-items:stretch; gap:8px; flex-wrap:wrap; margin:10px 0 6px; }
+.ci-step {
+  flex:1; min-width:132px; border-radius:12px; padding:14px 14px;
+  background:var(--card); border:1px solid var(--border);
+  font-family:'IBM Plex Mono',monospace; font-size:.72rem; color:var(--muted); line-height:1.5;
+}
+.ci-step .ci-n { display:block; font-size:.68rem; letter-spacing:1.5px; margin-bottom:6px; opacity:.75; }
+.ci-step .ci-t { display:block; font-size:.86rem; color:var(--text); margin-bottom:5px; font-family:'Syne',sans-serif; font-weight:700; }
+.ci-a { border-color:rgba(0,229,255,.4);  background:rgba(0,229,255,.06); }
+.ci-a .ci-n { color:var(--cyan); }
+.ci-b { border-color:rgba(255,107,53,.4); background:rgba(255,107,53,.06); }
+.ci-b .ci-n { color:var(--orange); }
+.ci-c { border-color:rgba(0,255,136,.35); background:rgba(0,255,136,.05); }
+.ci-c .ci-n { color:var(--green); }
+
+/* ═══ CADEIA CAUSAL ═══ */
+.cadeia { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:12px 0 4px; }
+.cd-box {
+  flex:1; min-width:150px; border-radius:10px; padding:13px 15px; text-align:center;
+  background:rgba(255,77,109,.06); border:1px solid rgba(255,77,109,.28);
+  font-family:'IBM Plex Mono',monospace; font-size:.74rem; color:#ffb3c1; line-height:1.5;
+}
+.cd-box.fim { background:rgba(255,77,109,.14); border-color:rgba(255,77,109,.5); color:#ff8fa3; font-weight:600; }
+.cd-arrow { color:#ff8fa3; font-size:1.3rem; flex-shrink:0; }
+@media(max-width:780px){ .cd-arrow{ transform:rotate(90deg); } }
+
+/* ═══ FLUXO DE AGENTES ═══ */
+.agflow { display:flex; align-items:stretch; gap:10px; flex-wrap:wrap; margin:6px 0 4px; }
+.agnode {
+  flex:1; min-width:140px; border-radius:12px; padding:14px 16px;
+  font-family:'IBM Plex Mono',monospace; font-size:.76rem; text-align:center;
+  background:var(--card); border:1px solid var(--border); color:var(--muted);
+}
+.agnode .an-name { font-size:.86rem; color:var(--text); display:block; margin-bottom:6px; }
+.agnode.has  { background:rgba(0,255,136,.06); border-color:rgba(0,255,136,.35); }
+.agnode.has .an-name { color:var(--green); }
+.agnode.hasnt { background:rgba(255,107,53,.05); border-color:rgba(255,107,53,.25); }
+.agnode.hasnt .an-name { color:var(--orange); }
+
+/* ═══ SIMULAÇÃO DA OBSERVAÇÃO ═══ */
+.obs-stage { position:relative; margin-top:6px; padding-top:52px; }
+.obs-q {
+  position:absolute; top:0; left:0; z-index:3;
+  font-family:'IBM Plex Mono',monospace; font-size:.78rem; color:var(--text);
+  background:rgba(0,229,255,.1); border:1px solid rgba(0,229,255,.45);
+  border-radius:999px; padding:7px 14px; white-space:nowrap;
+  opacity:0; transform:translateY(8px);
+  transition: left .55s cubic-bezier(.2,.7,.2,1), top .55s cubic-bezier(.2,.7,.2,1), opacity .35s ease, transform .35s ease;
+  box-shadow:0 8px 24px rgba(0,0,0,.25);
+}
+.obs-q.show { opacity:1; transform:translateY(0); }
+.obs-flow { display:grid; grid-template-columns:repeat(5, 1fr); gap:10px; }
+.obs-node {
+  background:var(--card); border:1px solid var(--border); border-radius:14px;
+  padding:12px 10px 10px; min-height:108px;
+  transition: border-color .35s ease, box-shadow .35s ease, transform .35s ease, background .35s ease;
+}
+.obs-node .obs-k {
+  display:block; font-family:'IBM Plex Mono',monospace; font-size:9.5px;
+  letter-spacing:1.4px; text-transform:uppercase; color:var(--muted); margin-bottom:6px;
+}
+.obs-node strong { display:block; font-family:'Syne',sans-serif; font-size:.82rem; line-height:1.25; margin-bottom:8px; }
+.obs-node .obs-nota {
+  display:block; font-family:'IBM Plex Mono',monospace; font-size:.68rem;
+  color:var(--muted); line-height:1.45; min-height:3.1em; white-space:pre-line;
+  opacity:0; transform:translateY(4px);
+  transition: opacity .35s ease, transform .35s ease;
+}
+.obs-node.on {
+  border-color:var(--cyan); background:rgba(0,229,255,.07);
+  box-shadow:0 0 0 1px rgba(0,229,255,.35), 0 10px 28px rgba(0,229,255,.08);
+  transform:translateY(-3px);
+}
+.obs-node.gemini.on {
+  border-color:var(--orange); background:rgba(255,107,53,.08);
+  box-shadow:0 0 0 1px rgba(255,107,53,.4), 0 10px 28px rgba(255,107,53,.1);
+}
+.obs-node.done { border-color:rgba(0,255,136,.45); background:rgba(0,255,136,.05); transform:none; box-shadow:none; }
+.obs-node.done .obs-nota, .obs-node.on .obs-nota { opacity:1; transform:none; color:var(--text); }
+.obs-totais { display:grid; grid-template-columns:repeat(5, 1fr); gap:8px; margin-top:12px; }
+.obs-totais div {
+  background:rgba(0,0,0,.28); border:1px solid var(--border); border-radius:12px; padding:10px 12px;
+}
+.obs-totais span {
+  display:block; font-family:'IBM Plex Mono',monospace; font-size:9.5px;
+  letter-spacing:1.3px; text-transform:uppercase; color:var(--muted); margin-bottom:4px;
+}
+.obs-totais strong { font-family:'IBM Plex Mono',monospace; font-size:.95rem; font-weight:500; }
+.obs-stage.fechado .obs-totais div { border-color:rgba(0,255,136,.35); background:rgba(0,255,136,.06); }
+.obs-fim {
+  margin-top:12px; border-radius:12px; padding:12px 16px;
+  border:1px solid rgba(0,255,136,.35); background:rgba(0,255,136,.07);
+  display:flex; justify-content:space-between; gap:12px; align-items:center;
+  opacity:0; transform:translateY(8px); transition: opacity .4s ease, transform .4s ease;
+}
+.obs-stage.fechado .obs-fim { opacity:1; transform:none; }
+.obs-fim strong { font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:1.4px; text-transform:uppercase; color:var(--green); }
+.obs-fim span { color:var(--muted); font-size:.82rem; }
+.obs-replay {
+  margin-top:14px; font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:.4px;
+  color:var(--cyan); background:rgba(0,229,255,.06); border:1px solid var(--border);
+  border-radius:999px; padding:6px 14px; cursor:pointer;
+}
+.obs-replay:hover { background:rgba(0,229,255,.14); border-color:var(--cyan); }
+@media(max-width:860px){
+  .obs-flow, .obs-totais { grid-template-columns:1fr 1fr; }
+  .obs-fim { flex-direction:column; align-items:flex-start; }
+}
+</style>
+</head>
+<body>
+
+<canvas id="bg"></canvas>
+<div id="progress-bar"></div>
+<div id="topbar">
+  <span class="tb-label">⬡ Etapa 6 — Observabilidade</span>
+  <span class="tb-title" id="slide-title-bar"></span>
+  <span class="tb-counter" id="slide-counter"></span>
+</div>
+<div id="nav-prev">←</div>
+<div id="nav-next">→</div>
+<div id="dots"></div>
+
+<div id="slides">
+
+<div class="slide active" data-title="Abertura">
+<div class="slide-inner">
+  <div class="badge">ETAPA 6 · OBSERVABILIDADE · SRE · LANGSMITH</div>
+  <h1 class="hero-title">O Assessor passa a <span style="color:var(--cyan)">contar</span><br>o que ele mesmo <span style="color:var(--orange)">faz</span>.</h1>
+  <p class="lead" style="max-width:780px;">Até aqui o sistema respondia. Nesta aula ele também deixa rastro: quanto tempo levou, qual modelo falou, quantos tokens gastou, se o guardrail barrou. A teoria dá o nome das perguntas. A prática coloca essas respostas numa tela do projeto e, em seguida, no LangSmith.</p>
+  <div class="hero-q">📌 <strong>A pergunta da aula:</strong> a resposta demorou e o aluno diz que o assessor errou. Onde você olha para saber qual nó demorou, qual modelo falou e quanto custou?</div>
+  <div class="pill-row" style="margin-top:22px;">
+    <div class="pill">observar e monitorar</div>
+    <div class="pill">SRE e SLO</div>
+    <div class="pill">custo de modelo</div>
+    <div class="pill">tela no Assessor</div>
+    <div class="pill">trace no LangSmith</div>
+  </div>
+  <div class="callout co-warn" style="max-width:780px;">
+    <div class="ct">Pré-requisito</div>
+    <p>O Assessor da etapa 5.2 no ar: chat, grafo, <code>GEMINI_API_KEY</code> e <code>GROQ_API_KEY</code> no <code>.env</code>. Avaliação da resposta (alucinação, nota de qualidade) fica para a próxima aula.</p>
+  </div>
+</div>
+</div>
+
+<div class="slide" data-title="Onde você olha">
+<div class="slide-inner">
+  <span class="tag">o buraco</span>
+  <h2 class="sec-title">O terminal <span style="color:var(--orange)">não responde</span> à pergunta</h2>
+  <p class="lead">Um <code class="inline">print</code> mostra um pedaço do que aconteceu naquela hora, naquela máquina, se alguém estava olhando. Amanhã o processo reiniciou, o print sumiu, e a pergunta continua: por que aquele turno levou 18 segundos?</p>
+  <div class="g3">
+    <div class="card"><h3 class="slide-h3">Qual nó</h3><p style="color:var(--muted);font-size:.86rem;line-height:1.6;">Guardrail, roteador, financeiro, agenda, orquestrador. O print da resposta final não diz quem consumiu o tempo.</p></div>
+    <div class="card"><h3 class="slide-h3">Qual modelo</h3><p style="color:var(--muted);font-size:.86rem;line-height:1.6;">O especialista promete Gemini e cai no Groq se o Gemini falha. Sem registro, o fallback é invisível.</p></div>
+    <div class="card"><h3 class="slide-h3">Quanto custou</h3><p style="color:var(--muted);font-size:.86rem;line-height:1.6;">Cada chamada gasta tokens de entrada e de saída, com preços diferentes. A resposta em português não traz a conta.</p></div>
+  </div>
+  <div class="callout co-info" style="margin-top:16px;">
+    <div class="ct">O que o projeto já tinha</div>
+    <p>O estado do grafo já calculava <code>rota</code> e <code>agentes_chamados</code>. <code>executar_fluxo_assessor</code> devolvia só o texto e descartava o resto. Observar, aqui, começa por parar de jogar fora o que o sistema já sabia.</p>
+  </div>
+</div>
+</div>
+
+<div class="slide" data-title="Observar">
+<div class="slide-inner">
+  <span class="tag">conceito</span>
+  <h2 class="sec-title">Observar é conseguir <span style="color:var(--cyan)">explicar</span> um caso</h2>
+  <p class="lead">Um sistema é observável quando, de fora, você explica por que ele se comportou daquele jeito, usando sinais que ele mesmo emitiu. A pergunta pode ser nova. Você não precisa ter adivinhado, na semana passada, que ia querer saber o custo daquele turno.</p>
+  <div class="ciclo">
+    <div class="ci-step ci-a"><span class="ci-n">01</span><span class="ci-t">Emitir</span>O código anota tempo, modelo, tokens, rota, erro. Sem isso, não há o que investigar.</div>
+    <div class="ci-step ci-b"><span class="ci-n">02</span><span class="ci-t">Guardar</span>O sinal fica num registro, num trace, num log. Memória do processo já serve para a aula.</div>
+    <div class="ci-step ci-c"><span class="ci-n">03</span><span class="ci-t">Perguntar</span>“Por que este turno passou de 8 s?” A resposta sai dos sinais, não de uma nova teoria.</div>
+  </div>
+  <div class="callout co-ok">
+    <div class="ct">No Assessor</div>
+    <p>Um turno é uma mensagem do usuário. Explicá-lo é dizer a rota, os modelos, os tokens, o custo, a latência e se terminou em ok, erro ou bloqueio.</p>
+  </div>
+</div>
+</div>
+
+<div class="slide" data-title="Monitorar">
+<div class="slide-inner">
+  <span class="otag">conceito</span>
+  <h2 class="sec-title">Monitorar é <span style="color:var(--orange)">vigiar um limite</span></h2>
+  <p class="lead">Monitorar é olhar, o tempo todo, para perguntas que você já escolheu. O painel existe para essas perguntas. O alerta existe para quando a resposta sai do combinado. Você não investiga um caso: você vê se o serviço, como um todo, ainda está dentro do que foi aceito.</p>
+  <div class="g2">
+    <div class="card">
+      <h3 class="slide-h3">Pergunta fixa</h3>
+      <p style="color:var(--muted);font-size:.88rem;line-height:1.65;">O p95 dos turnos desta execução está abaixo de 8 segundos? A taxa de erro está abaixo de 5%? O banner verde ou vermelho da tela é essa vigilância.</p>
+    </div>
+    <div class="card">
+      <h3 class="slide-h3">Número agregado</h3>
+      <p style="color:var(--muted);font-size:.88rem;line-height:1.65;">Média, percentil, soma de tokens, custo acumulado, quantos bloqueios. Um turno sozinho não responde. A faixa de big numbers responde.</p>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="slide" data-title="A diferença">
+<div class="slide-inner">
+  <span class="ptag">lado a lado</span>
+  <h2 class="sec-title">As duas perguntas <span style="color:var(--purple)">moram juntas</span></h2>
+  <p class="lead">Observar e monitorar usam os mesmos sinais. Muda a pergunta.</p>
+  <div class="card" style="padding:0;overflow:hidden;">
+    <table class="tbl">
+      <thead><tr><th></th><th>Observar</th><th>Monitorar</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Pergunta</strong></td><td>Por que este turno levou 18 s?</td><td>O p95 passou de 8 s?</td></tr>
+        <tr><td><strong>Unidade</strong></td><td>Um caso, com o caminho interno</td><td>O conjunto dos turnos</td></tr>
+        <tr><td><strong>Ferramenta típica</strong></td><td>Trace (a árvore de um pedido)</td><td>Painel e alerta</td></tr>
+        <tr><td><strong>Nesta aula</strong></td><td>A tabela de turnos e o trace do LangSmith</td><td>Os big numbers e o banner do SLO</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout co-info">
+    <div class="ct">Como a tela junta as duas</div>
+    <p>A linha do turno explica um caso. O banner vigia o limite. Os dois leem o mesmo <code>GET /monitor</code>.</p>
+  </div>
+</div>
+</div>
+
+<div class="slide" data-title="Três sinais">
+<div class="slide-inner">
+  <span class="tag">sinais</span>
+  <h2 class="sec-title">Log, métrica e <span style="color:var(--cyan)">trace</span></h2>
+  <div class="g3">
+    <div class="card"><h3 class="slide-h3" style="color:var(--cyan);">Log</h3><p style="color:var(--muted);font-size:.86rem;line-height:1.6;">Um fato discreto, com hora. “Turno 16:09, rota financeiro, status ok.” Bom para ler um caso. Ruim para responder “qual a média da última hora?”.</p></div>
+    <div class="card"><h3 class="slide-h3" style="color:var(--green);">Métrica</h3><p style="color:var(--muted);font-size:.86rem;line-height:1.6;">Um número que agrega: latência p95, taxa de erro, tokens, custo. É o que o painel mostra em destaque. Perde o detalhe de um turno se você não guardar também a lista.</p></div>
+    <div class="card"><h3 class="slide-h3" style="color:var(--orange);">Trace</h3><p style="color:var(--muted);font-size:.86rem;line-height:1.6;">A árvore de um pedido: quem chamou quem, com duração e tokens em cada nó. É o que o LangSmith abre. A tela não redesenha essa árvore.</p></div>
+  </div>
+  <div class="callout co-warn" style="margin-top:16px;">
+    <div class="ct">O que a tela guarda de propósito</div>
+    <p>Hora, latência, rota, status, tokens, custo, sessão. O texto do prompt fica no trace. O chat já mostra a resposta. A tela de operação não repete os dois — também porque esse texto é o que o anonimizador protege.</p>
+  </div>
+</div>
+</div>
+
+<div class="slide" data-title="SRE">
+<div class="slide-inner">
+  <span class="otag">sre</span>
+  <h2 class="sec-title">SRE é confiabilidade com <span style="color:var(--orange)">número</span></h2>
+  <p class="lead">Site Reliability Engineering trata “o serviço está saudável?” como trabalho de engenharia. Há um limite combinado antes do usuário reclamar. Há um número que diz se o limite ainda vale. Há uma decisão quando o número estoura: parar de empilhar função e ir consertar.</p>
+  <div class="card" style="padding:0;overflow:hidden;margin-bottom:14px;">
+    <table class="tbl">
+      <thead><tr><th>Sinal clássico</th><th>A pergunta</th><th>No Assessor</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Latência</strong></td><td>Quanto tempo o pedido leva?</td><td>Média e p95 do turno</td></tr>
+        <tr><td><strong>Tráfego</strong></td><td>Quanto trabalho está chegando?</td><td>Quantidade de turnos nesta execução</td></tr>
+        <tr><td><strong>Erros</strong></td><td>Qual fração falha?</td><td>Turno em que o grafo levanta exceção</td></tr>
+        <tr><td><strong>Saturação</strong></td><td>O recurso está no limite?</td><td><code>em andamento</code>, um proxy frouxo. O modelo é API de terceiro: a fila da GPU não é nossa</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout co-ok">
+    <div class="ct">Orçamento de erro, em uma frase</div>
+    <p>Se o acordo é “no máximo 5% dos turnos podem falhar”, esses 5% são o espaço de falha. Abaixo disso, dá para seguir construindo. Acima, a confiabilidade virou o trabalho da vez. A aula não opera esse orçamento; o banner só mostra se o limite está inteiro.</p>
+  </div>
+</div>
+</div>
+
+<div class="slide" data-title="SLO">
+<div class="slide-inner">
+  <span class="gtag">slo</span>
+  <h2 class="sec-title">SLI é a medida. <span style="color:var(--green)">SLO</span> é o limite.</h2>
+  <div class="g2">
+    <div class="card">
+      <h3 class="slide-h3">SLI</h3>
+      <p style="color:var(--muted);font-size:.88rem;line-height:1.65;">O indicador. No Assessor: latência p95 dos turnos guardados, e taxa de erro (exceções ÷ turnos). O p95 é o nearest-rank: ordena as latências e pega o menor valor que cobre 95% delas. Com 4 turnos, ele fica perto do máximo. A conta é a de produção; o número só firma com volume.</p>
+    </div>
+    <div class="card">
+      <h3 class="slide-h3">SLO</h3>
+      <p style="color:var(--muted);font-size:.88rem;line-height:1.65;">O objetivo. Nesta aula: p95 até <strong style="color:var(--text)">8 segundos</strong> e taxa de erro até <strong style="color:var(--text)">5%</strong>. <code>slo_ok</code> é os dois juntos. O banner pinta verde ou vermelho a partir desse booleano.</p>
+    </div>
+  </div>
+  <div class="callout co-info" style="margin-top:14px;">
+    <div class="ct">SLA, para fechar o trio</div>
+    <p>SLA é o mesmo tipo de limite quando vira contrato com consequência (crédito, multa, cláusula). Aqui não há contrato. Há um SLO de sala, escrito na API, para a tela não inventar o número.</p>
+  </div>
+  <div class="callout co-warn">
+    <div class="ct">Bloqueio não é erro</div>
+    <p>O guardrail de entrada que recusa um pedido está funcionando. Ele entra no big number de bloqueios e no status <code>bloqueado</code>. A taxa de erro do SLO conta só exceção. Senão, testar o guardrail pintaria o serviço de vermelho.</p>
+  </div>
+</div>
+</div>
+
+<div class="slide" data-title="Métricas de chatbot">
+<div class="slide-inner slide-scroll">
+  <span class="tag">chatbot</span>
+  <h2 class="sec-title">O que se mede num <span style="color:var(--cyan)">chat</span> de IA</h2>
+  <p class="lead">Um chatbot gasta um caminho diferente a cada pergunta: às vezes só o roteador, às vezes ferramenta, às vezes fallback. Latência e custo balançam. Por isso a operação olha percentil e conta, não uma média solta.</p>
+  <div class="card" style="padding:0;overflow:hidden;">
+    <table class="tbl">
+      <thead><tr><th>Pergunta da operação</th><th>Sinal</th><th>Na tela</th></tr></thead>
+      <tbody>
+        <tr><td>O turno foi rápido?</td><td>Latência do pedido inteiro, média e p95</td><td>Big numbers e o gráfico de linha</td></tr>
+        <tr><td>Está quebrando?</td><td>Taxa de erro</td><td>Taxa de erro e o banner</td></tr>
+        <tr><td>Quanto entrou de trabalho?</td><td>Turnos</td><td>Big number de turnos</td></tr>
+        <tr><td>Qual modelo falou, e quantas vezes?</td><td>Nome e contagem por modelo</td><td>Tabela por modelo</td></tr>
+        <tr><td>O Gemini caiu e o Groq assumiu?</td><td>Fallback no nó do especialista</td><td>Big number de fallbacks</td></tr>
+        <tr><td>Quanto se gastou?</td><td>Tokens de entrada, de saída e custo</td><td>Faixa de modelo e custo acumulado</td></tr>
+        <tr><td>Para onde a pergunta foi?</td><td>Rota do grafo</td><td>Tabela de turnos e tabela por rota</td></tr>
+        <tr><td>O guardrail segurou?</td><td>Bloqueio de entrada</td><td>Status <code>bloqueado</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout co-info">
+    <div class="ct">O que um chat em produção ainda mede, e esta tela deixa quieto</div>
+    <p>Tempo até o primeiro token, se a resposta viesse em stream — o Assessor espera o turno inteiro. Sucesso de cada tool. E a nota da resposta, que é a próxima aula.</p>
+  </div>
+</div>
+</div>
+
+<div class="slide" data-title="IA sem chatbot">
+<div class="slide-inner slide-scroll">
+  <span class="ptag">outros sistemas</span>
+  <h2 class="sec-title">IA sem conversa mede <span style="color:var(--purple)">outra unidade</span></h2>
+  <p class="lead">A unidade deixa de ser “a mensagem de uma pessoa” e passa a ser item, lote, consulta ou imagem. Saturação volta a importar quando o modelo roda na máquina de vocês ou quando o trabalho chega em fila.</p>
+  <div class="card" style="padding:0;overflow:hidden;">
+    <table class="tbl">
+      <thead><tr><th>Sistema</th><th>O que a operação mede</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Classificador</strong><br>fraude, documento, imagem</td><td>Latência por item, itens por segundo, taxa de erro da API, custo por mil previsões. Fila e GPU entram se o modelo estiver na própria infra.</td></tr>
+        <tr><td><strong>Lote</strong><br>resumir 10 mil textos de madrugada</td><td>Duração do job, itens que falharam, tokens do lote, custo do lote, se o job terminou. Não há “usuário esperando um turno”.</td></tr>
+        <tr><td><strong>RAG sem chat</strong><br>busca que devolve trechos</td><td>Latência da busca, latência do modelo, tokens, consultas que voltaram vazias, custo por consulta.</td></tr>
+        <tr><td><strong>Extração</strong><br>PDF vira campos</td><td>Páginas por minuto, falha por arquivo, tokens, custo por documento, tamanho da fila.</td></tr>
+        <tr><td><strong>Fala</strong><br>áudio vira texto, ou o contrário</td><td>Latência por minuto de áudio, taxa de falha, custo por minuto. O token às vezes é segundo de áudio, não token de texto.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout co-warn">
+    <div class="ct">O que continua sendo avaliação</div>
+    <p>Acurácia, precisão, “o resumo inventou fato?”. Isso julga a qualidade da saída. A operação desta aula julga se o sistema respondeu, em quanto tempo e por quanto. As duas conversam; não são o mesmo número.</p>
+  </div>
+</div>
+</div>
+
+<div class="slide" data-title="Custo">
+<div class="slide-inner">
+  <span class="otag">conta</span>
+  <h2 class="sec-title">Custo é token <span style="color:var(--orange)">vezes preço</span></h2>
+  <p class="lead">O provedor cobra por milhão de tokens, e entrada e saída têm preços diferentes. A saída do Gemini inclui os tokens de raciocínio. A tela usa uma tabela fixa, a publicada em outubro de 2026, sem desconto de cache — em aula a conta é o preço cheio.</p>
+  <div class="card" style="padding:0;overflow:hidden;margin-bottom:14px;">
+    <table class="tbl">
+      <thead><tr><th>Modelo</th><th>Entrada / 1M</th><th>Saída / 1M</th><th>Onde</th></tr></thead>
+      <tbody>
+        <tr><td><code>gemini-2.5-flash</code></td><td>US$ 0,30</td><td>US$ 2,50</td><td>Especialista (financeiro, agenda)</td></tr>
+        <tr><td><code>openai/gpt-oss-120b</code></td><td>US$ 0,15</td><td>US$ 0,60</td><td>Groq: roteador, guardrail, orquestrador, FAQ e o fallback</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="g2">
+    <div class="callout co-info" style="margin:0;">
+      <div class="ct">Por que o Groq pode ser “o mais usado”</div>
+      <p>Um turno de finanças chama o Groq várias vezes e o Gemini uma. O big number conta chamadas. A tabela por modelo mostra que o Gemini, sozinho, pode custar mais.</p>
+    </div>
+    <div class="callout co-warn" style="margin:0;">
+      <div class="ct">Não é a fatura</div>
+      <p>O LangSmith aplica a tabela dele. O centavo pode divergir. Reiniciar o servidor zera o acumulado: o registro vive na memória do processo.</p>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="slide" data-title="A observação em movimento">
+<div class="slide-inner">
+  <span class="tag">simulação</span>
+  <h2 class="sec-title">Um turno, do pedido ao <span style="color:var(--cyan)">painel</span></h2>
+  <p class="lead">A pergunta atravessa o grafo. Cada nó deixa o que custou. O painel só fecha quando o turno termina.</p>
+  <div class="obs-stage" id="obs-stage">
+    <div class="obs-q" id="obs-q">O que é custo fixo?</div>
+    <div class="obs-flow" id="obs-flow">
+      <div class="obs-node" data-i="0"><span class="obs-k">groq</span><strong>guardrail entrada</strong><em class="obs-nota"></em></div>
+      <div class="obs-node" data-i="1"><span class="obs-k">groq</span><strong>roteador</strong><em class="obs-nota"></em></div>
+      <div class="obs-node gemini" data-i="2"><span class="obs-k">gemini</span><strong>financeiro</strong><em class="obs-nota"></em></div>
+      <div class="obs-node" data-i="3"><span class="obs-k">groq</span><strong>orquestrador</strong><em class="obs-nota"></em></div>
+      <div class="obs-node" data-i="4"><span class="obs-k">groq</span><strong>guardrail saída</strong><em class="obs-nota"></em></div>
+    </div>
+    <div class="obs-totais">
+      <div><span>latência</span><strong id="obs-lat">—</strong></div>
+      <div><span>tokens</span><strong id="obs-tok">—</strong></div>
+      <div><span>custo</span><strong id="obs-custo">—</strong></div>
+      <div><span>rota</span><strong id="obs-rota">—</strong></div>
+      <div><span>status</span><strong id="obs-status">—</strong></div>
+    </div>
+    <div class="obs-fim" id="obs-fim">
+      <strong>turno anotado</strong>
+      <span>rota financeiro · status ok · 5,0 s neste turno · p95 abaixo de 8 s · SLO dentro</span>
+    </div>
+  </div>
+  <button type="button" class="obs-replay" id="obs-replay">ver de novo</button>
+</div>
+</div>
+
+<div class="slide" data-title="A pilha de verdade">
+<div class="slide-inner">
+  <span class="ptag">indústria</span>
+  <h2 class="sec-title">Prometheus e Grafana fazem <span style="color:var(--purple)">esta tela</span>, em escala</h2>
+  <p class="lead">Numa empresa, os mesmos números viajam por ferramentas com nome. A aula cita o mapa e constrói a miniatura no Assessor.</p>
+  <div class="ciclo">
+    <div class="ci-step ci-a"><span class="ci-n">sinal</span><span class="ci-t">OpenTelemetry</span>A língua comum de log, métrica e trace. O LangChain sabe falar um pedaço disso. A gente não sobe um coletor.</div>
+    <div class="ci-step ci-b"><span class="ci-n">número</span><span class="ci-t">Prometheus</span>Guarda a métrica ao longo do tempo. O nosso registro guarda os últimos 50 turnos na RAM.</div>
+    <div class="ci-step ci-c"><span class="ci-n">desenho</span><span class="ci-t">Grafana</span>O painel. Big number, tabela, gráfico. É o papel de <code>monitor.html</code>.</div>
+    <div class="ci-step"><span class="ci-n">aviso</span><span class="ci-t">Alerta</span>Alguém é chamado quando o SLO estoura. Aqui, o banner fica vermelho.</div>
+  </div>
+  <div class="callout co-ok">
+    <div class="ct">O que vocês instalam nesta aula</div>
+    <p>Nada dessa pilha. Um módulo Python anota. Uma rota agrega. Uma página desenha. O LangSmith, mais adiante, mostra o trace que a página não desenha.</p>
+  </div>
+</div>
+</div>
+
+<div class="slide" data-title="O desenho">
+<div class="slide-inner">
+  <span class="gtag">prática</span>
+  <h2 class="sec-title">Quatro peças, <span style="color:var(--green)">um JSON</span></h2>
+  <div class="ciclo">
+    <div class="ci-step ci-a"><span class="ci-n">novo</span><span class="ci-t">observabilidade.py</span>Escuta cada chamada de modelo e cada turno. Não entra no chat.</div>
+    <div class="ci-step ci-b"><span class="ci-n">muda</span><span class="ci-t">graph.py</span>Abre o registro antes do <code>invoke</code> e fecha no <code>finally</code>.</div>
+    <div class="ci-step ci-c"><span class="ci-n">novo</span><span class="ci-t">monitor.py</span><code>GET /monitor</code> transforma o registro nos big numbers.</div>
+    <div class="ci-step"><span class="ci-n">muda</span><span class="ci-t">main.py</span>Publica a rota antes do mount do frontend.</div>
+  </div>
+  <p class="lead" style="margin-top:16px;">A quinta peça é a página, arquivo novo, sem alterar <code>index.html</code>. Ela só desenha o JSON. A fórmula do p95, do custo e do SLO fica na rota — o mesmo JSON poderia alimentar um Grafana depois.</p>
+  <div class="callout co-info">
+    <div class="ct">Ordem de colar</div>
+    <p>Primeiro <code>app/observabilidade.py</code>, senão o <code>graph.py</code> quebra no import. Depois o grafo, a rota, o <code>main.py</code>, por último <code>frontend/monitor.html</code>. Reinicie o uvicorn no fim.</p>
+  </div>
+</div>
+</div>
+
+<div class="slide" data-title="observabilidade.py">
+<div class="slide-inner slide-scroll">
+  <div class="bloco-mark bl-a">bloco A · registro</div>
+  <div class="step-marker">
+    <div class="step-num">1</div>
+    <div class="step-meta">
+      <div class="step-file">app/observabilidade.py — arquivo novo</div>
+      <div class="step-obj">criar em app/, ao lado de graph.py. Colar inteiro.</div>
+    </div>
+  </div>
+  <p class="lead">Este módulo é o caderno. Ele pendura um callback nos três modelos (<code>llm_gemini</code>, <code>llm_groq</code>, <code>llm_rapido</code>) e anota nome, tokens, custo e latência de cada chamada. <code>abrir_turno</code> / <code>fechar_turno</code> fecham a conta da mensagem do usuário. Prompt não é gravado. Fora de um turno — o resumo de sessão, o <code>GET /chat</code> de depuração — a chamada de modelo é ignorada.</p>
+  <div class="code-wrap">
+    <div class="code-header" onclick="toggleCode(this)">
+      <span class="fname">app/observabilidade.py — arquivo completo</span>
+      <div class="code-right"><span class="lbadge">colar inteiro</span><button class="copy-btn" onclick="copyCode(event, this)">Copiar</button><span class="code-toggle-btn">Clique para ver</span></div>
+    </div>
+    <div class="code">&quot;&quot;&quot;
+Registro do que o Assessor faz em cada turno.
+
+A tela de monitoramento não fala com o LangSmith. Ela pergunta para a nossa
+API, e a API lê o que este módulo anotou enquanto o grafo rodava.
+
+Cada chamada de modelo (Gemini ou Groq) deixa: nome do modelo, tokens, custo
+e latência. Cada mensagem do usuário deixa: rota, status e a soma das chamadas
+daquele turno. O preço é uma tabela fixa, a mesma publicada pelos provedores
+em outubro de 2026 — o centavo pode divergir do LangSmith, que usa a tabela dele.
+
+Preços por 1 milhão de tokens (entrada, saída), em dólar:
+  gemini-2.5-flash     0,30 / 2,50   texto, ai.google.dev/pricing
+  openai/gpt-oss-120b  0,15 / 0,60   Groq, console.groq.com/docs/models
+
+A saída do Gemini inclui os tokens de raciocínio, como na tabela do Google.
+Não há desconto de cache: em aula a conta usa o preço cheio.
+&quot;&quot;&quot;
+
+from __future__ import annotations
+
+import threading
+import time
+import uuid
+from datetime import datetime
+from typing import Any
+from zoneinfo import ZoneInfo
+
+from langchain_core.callbacks import BaseCallbackHandler
+from langchain_core.outputs import LLMResult
+
+_FUSO = ZoneInfo(&quot;America/Sao_Paulo&quot;)
+
+# USD por 1 milhão de tokens: (entrada, saída).
+PRECO_POR_MILHAO: dict[str, tuple[float, float]] = {
+    &quot;gemini-2.5-flash&quot;: (0.30, 2.50),
+    &quot;openai/gpt-oss-120b&quot;: (0.15, 0.60),
+}
+
+# O especialista promete Gemini. Groq neste nó é o with_fallbacks de llms.py.
+_NOS_ESPECIALISTA = {&quot;financeiro&quot;, &quot;agenda&quot;}
+_MODELO_ESPECIALISTA = &quot;gemini-2.5-flash&quot;
+
+LIMITE_TURNOS = 50
+LIMITE_P95_MS = 8_000
+LIMITE_TAXA_ERRO = 0.05
+
+_lock = threading.Lock()
+_inicio_processo = time.time()
+_em_andamento = 0
+_turnos: list[dict[str, Any]] = []
+_chamadas: list[dict[str, Any]] = []
+_abertos: dict[str, float] = {}
+_runs: dict[str, dict[str, Any]] = {}
+_ligado = False
+
+# Um handler só, compartilhado pelos três modelos. O turno entra no run
+# na largada da chamada, então duas requisições ao mesmo tempo não misturam
+# a conta.
+coletor = None  # preenchido abaixo, depois da classe
+
+
+def _agora_local() -&gt; str:
+    return datetime.now(_FUSO).strftime(&quot;%H:%M:%S&quot;)
+
+
+def _nome_modelo(serialized: dict | None, invocation_params: dict | None, resposta_meta: dict | None) -&gt; str:
+    candidatos = []
+    for fonte in (resposta_meta or {}, invocation_params or {}, (serialized or {}).get(&quot;kwargs&quot;) or {}):
+        for chave in (&quot;model_name&quot;, &quot;model&quot;):
+            valor = fonte.get(chave)
+            if valor:
+                candidatos.append(str(valor))
+    for nome in candidatos:
+        if nome.startswith(&quot;models/&quot;):
+            nome = nome.split(&quot;/&quot;, 1)[1]
+        return nome
+    return &quot;desconhecido&quot;
+
+
+def _no_do_grafo(metadata: dict | None) -&gt; str:
+    &quot;&quot;&quot;O nó do nosso grafo, não o nó interno do create_agent.&quot;&quot;&quot;
+    metadata = metadata or {}
+    ns = str(metadata.get(&quot;langgraph_checkpoint_ns&quot;) or &quot;&quot;)
+    candidatos: list[str] = []
+    if ns:
+        for parte in ns.split(&quot;|&quot;):
+            candidatos.append(parte.split(&quot;:&quot;, 1)[0])
+    no = metadata.get(&quot;langgraph_node&quot;)
+    if no:
+        candidatos.append(str(no))
+    for nome in candidatos:
+        if nome in _NOS_ESPECIALISTA:
+            return nome
+    return candidatos[0] if candidatos else &quot;&quot;
+
+
+def _tokens(message: Any) -&gt; tuple[int, int]:
+    usage = getattr(message, &quot;usage_metadata&quot;, None) or {}
+    if not isinstance(usage, dict):
+        usage = {
+            &quot;input_tokens&quot;: getattr(usage, &quot;input_tokens&quot;, 0),
+            &quot;output_tokens&quot;: getattr(usage, &quot;output_tokens&quot;, 0),
+        }
+    entrada = int(usage.get(&quot;input_tokens&quot;) or 0)
+    saida = int(usage.get(&quot;output_tokens&quot;) or 0)
+    if entrada or saida:
+        return entrada, saida
+
+    meta = getattr(message, &quot;response_metadata&quot;, None) or {}
+    bruto = meta.get(&quot;token_usage&quot;) or meta.get(&quot;usage&quot;) or {}
+    entrada = int(bruto.get(&quot;prompt_tokens&quot;) or bruto.get(&quot;input_tokens&quot;) or 0)
+    saida = int(bruto.get(&quot;completion_tokens&quot;) or bruto.get(&quot;output_tokens&quot;) or 0)
+    return entrada, saida
+
+
+def custo_usd(modelo: str, entrada: int, saida: int) -&gt; float:
+    precos = PRECO_POR_MILHAO.get(modelo)
+    if precos is None:
+        for chave, valor in PRECO_POR_MILHAO.items():
+            if chave in modelo:
+                precos = valor
+                break
+    if precos is None:
+        return 0.0
+    preco_entrada, preco_saida = precos
+    return (entrada * preco_entrada + saida * preco_saida) / 1_000_000
+
+
+def _eh_fallback(no: str, modelo: str) -&gt; bool:
+    if no not in _NOS_ESPECIALISTA:
+        return False
+    return _MODELO_ESPECIALISTA not in modelo
+
+
+class ColetorChamadas(BaseCallbackHandler):
+    &quot;&quot;&quot;Anota cada chamada de chat model sem guardar o texto do prompt.&quot;&quot;&quot;
+
+    raise_error = False
+
+    def on_chat_model_start(
+        self,
+        serialized: dict[str, Any],
+        messages: list[list[Any]],
+        *,
+        run_id: Any,
+        metadata: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -&gt; None:
+        invocation = kwargs.get(&quot;invocation_params&quot;) or {}
+        with _lock:
+            _runs[str(run_id)] = {
+                &quot;t0&quot;: time.perf_counter(),
+                &quot;modelo&quot;: _nome_modelo(serialized, invocation, None),
+                &quot;no&quot;: _no_do_grafo(metadata),
+                &quot;turno_id&quot;: _turno_da_thread(),
+            }
+
+    def on_llm_end(self, response: LLMResult, *, run_id: Any, **kwargs: Any) -&gt; None:
+        chave = str(run_id)
+        with _lock:
+            abertura = _runs.pop(chave, None)
+        if abertura is None or not abertura.get(&quot;turno_id&quot;):
+            return
+
+        message = None
+        try:
+            message = response.generations[0][0].message
+        except (IndexError, AttributeError):
+            message = None
+
+        entrada, saida = _tokens(message) if message is not None else (0, 0)
+        meta = getattr(message, &quot;response_metadata&quot;, None) if message is not None else None
+        modelo = _nome_modelo(None, None, meta) 
+        if modelo == &quot;desconhecido&quot;:
+            modelo = abertura[&quot;modelo&quot;]
+
+        latencia_ms = int((time.perf_counter() - abertura[&quot;t0&quot;]) * 1000)
+        registro = {
+            &quot;turno_id&quot;: abertura[&quot;turno_id&quot;],
+            &quot;modelo&quot;: modelo,
+            &quot;no&quot;: abertura[&quot;no&quot;],
+            &quot;tokens_entrada&quot;: entrada,
+            &quot;tokens_saida&quot;: saida,
+            &quot;custo_usd&quot;: custo_usd(modelo, entrada, saida),
+            &quot;latencia_ms&quot;: latencia_ms,
+            &quot;fallback&quot;: _eh_fallback(abertura[&quot;no&quot;], modelo),
+        }
+        with _lock:
+            _chamadas.append(registro)
+
+    def on_llm_error(self, error: BaseException, *, run_id: Any, **kwargs: Any) -&gt; None:
+        with _lock:
+            _runs.pop(str(run_id), None)
+
+
+coletor = ColetorChamadas()
+
+# O id do turno vive num atributo de thread: o endpoint roda numa thread do
+# uvicorn, e as chamadas de modelo acontecem nela. contextvars quebram quando
+# o LangGraph copia o contexto sem este valor.
+_turno_por_thread = threading.local()
+
+
+def _turno_da_thread() -&gt; str | None:
+    return getattr(_turno_por_thread, &quot;turno_id&quot;, None)
+
+
+def ligar_coleta() -&gt; None:
+    &quot;&quot;&quot;Põe o coletor nos três modelos, uma vez por processo.&quot;&quot;&quot;
+    global _ligado
+    if _ligado:
+        return
+    from app.llms import llm_gemini, llm_groq, llm_rapido
+
+    for modelo in (llm_gemini, llm_groq, llm_rapido):
+        atuais = list(modelo.callbacks or [])
+        if not any(isinstance(item, ColetorChamadas) for item in atuais):
+            modelo.callbacks = [*atuais, coletor]
+    _ligado = True
+
+
+def abrir_turno() -&gt; str:
+    ligar_coleta()
+    turno_id = uuid.uuid4().hex
+    _turno_por_thread.turno_id = turno_id
+    with _lock:
+        global _em_andamento
+        _em_andamento += 1
+        _abertos[turno_id] = time.perf_counter()
+    return turno_id
+
+
+def fechar_turno(turno_id: str, session_id: str, rota: str, status: str) -&gt; None:
+    _turno_por_thread.turno_id = None
+    with _lock:
+        inicio = _abertos.pop(turno_id, None)
+        if inicio is None:
+            return
+        global _em_andamento
+        _em_andamento = max(0, _em_andamento - 1)
+        do_turno = [c for c in _chamadas if c[&quot;turno_id&quot;] == turno_id]
+        _turnos.append({
+            &quot;id&quot;: turno_id,
+            &quot;hora&quot;: _agora_local(),
+            &quot;session_id&quot;: session_id,
+            &quot;latencia_ms&quot;: int((time.perf_counter() - inicio) * 1000),
+            &quot;rota&quot;: rota or &quot;—&quot;,
+            &quot;status&quot;: status,
+            &quot;tokens_total&quot;: sum(c[&quot;tokens_entrada&quot;] + c[&quot;tokens_saida&quot;] for c in do_turno),
+            &quot;custo_usd&quot;: sum(c[&quot;custo_usd&quot;] for c in do_turno),
+        })
+        while len(_turnos) &gt; LIMITE_TURNOS:
+            antigo = _turnos.pop(0)
+            _chamadas[:] = [c for c in _chamadas if c[&quot;turno_id&quot;] != antigo[&quot;id&quot;]]
+
+
+def status_do_estado(estado: dict) -&gt; str:
+    &quot;&quot;&quot;Bloqueio de entrada é o sistema funcionando. Erro fica para a exceção.&quot;&quot;&quot;
+    for nome in estado.get(&quot;agentes_chamados&quot;) or []:
+        if isinstance(nome, str) and nome.startswith(&quot;guardrail_entrada:&quot;) and nome != &quot;guardrail_entrada:aprovado&quot;:
+            return &quot;bloqueado&quot;
+    return &quot;ok&quot;
+
+
+def listar_turnos() -&gt; list[dict[str, Any]]:
+    with _lock:
+        return [
+            {chave: valor for chave, valor in turno.items() if chave != &quot;id&quot;}
+            for turno in _turnos
+        ]
+
+
+def listar_chamadas() -&gt; list[dict[str, Any]]:
+    with _lock:
+        return [
+            {chave: valor for chave, valor in chamada.items() if chave != &quot;turno_id&quot;}
+            for chamada in _chamadas
+        ]
+
+
+def situacao() -&gt; dict[str, int]:
+    with _lock:
+        return {
+            &quot;em_andamento&quot;: _em_andamento,
+            &quot;no_ar_segundos&quot;: int(time.time() - _inicio_processo),
+        }</div>
+  </div>
+  <div class="callout co-warn">
+    <div class="ct">Por que existe</div>
+    <p>A rota não pode inventar token. Quem vê <code>usage_metadata</code> é quem está ao lado da chamada. Se este arquivo não estiver no lugar, a faixa de modelo da tela fica zerada com o chat funcionando.</p>
+  </div>
+</div>
+</div>
+
+<div class="slide" data-title="graph.py import">
+<div class="slide-inner slide-scroll">
+  <div class="bloco-mark bl-b">bloco B · graph.py</div>
+  <div class="step-marker">
+    <div class="step-num b">2</div>
+    <div class="step-meta">
+      <div class="step-file">app/graph.py — três alterações</div>
+      <div class="step-obj">não reescreva o arquivo. Achou o trecho, troca o trecho.</div>
+    </div>
+  </div>
+  <h3 class="slide-h3">2.1 O import</h3>
+  <p class="lead">Logo abaixo de <code class="inline">from app.memory import salvar_mensagem</code>. Sem esta linha, <code>abrir_turno</code> não existe neste arquivo.</p>
+  <div class="code-wrap">
+    <div class="code-header" onclick="toggleCode(this)">
+      <span class="fname">app/graph.py — import</span>
+      <div class="code-right"><span class="lbadge">acrescentar a segunda linha</span><button class="copy-btn" onclick="copyCode(event, this)">Copiar</button><span class="code-toggle-btn">Clique para ver</span></div>
+    </div>
+    <div class="code">from app.memory import salvar_mensagem
+from app.observabilidade import abrir_turno, fechar_turno, status_do_estado</div>
+  </div>
+</div>
+</div>
+
+<div class="slide" data-title="graph.py orquestrador">
+<div class="slide-inner slide-scroll">
+  <div class="bloco-mark bl-b">bloco B · graph.py</div>
+  <div class="step-marker">
+    <div class="step-num b">2</div>
+    <div class="step-meta">
+      <div class="step-file">app/graph.py — substitua a função no_orquestrador</div>
+      <div class="step-obj">a função inteira, da linha def até o return</div>
+    </div>
+  </div>
+  <p class="lead">O roteador já repassava <code>config</code>. O orquestrador não. Sem isso, a chamada de modelo desse nó não herda o metadata do grafo e o registro perde de qual nó ela veio. O comportamento da resposta não muda: muda o rastro.</p>
+  <div class="code-wrap">
+    <div class="code-header" onclick="toggleCode(this)">
+      <span class="fname">app/graph.py — no_orquestrador</span>
+      <div class="code-right"><span class="lbadge">substituir a função</span><button class="copy-btn" onclick="copyCode(event, this)">Copiar</button><span class="code-toggle-btn">Clique para ver</span></div>
+    </div>
+    <div class="code">def no_orquestrador(estado: Estado, config: RunnableConfig) -&gt; dict:
+    # Pega a última resposta do especialista (última AIMessage com conteúdo)
+    ultima_especialista = &quot;&quot;
+    for mensagem in reversed(estado[&quot;messages&quot;]):
+        if mensagem.type == &quot;ai&quot; and mensagem.content:
+            ultima_especialista = mensagem.content
+            break
+    # config segue o mesmo motivo do roteador: sem ele, o modelo deste nó
+    # não herda o metadata do grafo (e o registro de observabilidade perde o nó).
+    saida = orquestrador_app.invoke({
+        &quot;messages&quot;: [{&quot;role&quot;: &quot;human&quot;, &quot;content&quot;: ultima_especialista}]
+    }, config=config)
+
+    return {
+        &quot;agentes_chamados&quot;: [&quot;orquestrador&quot;],
+        &quot;messages&quot;:        [{&quot;role&quot;: &quot;assistant&quot;, &quot;content&quot;: saida[&quot;messages&quot;][-1].text}]
+    }</div>
+  </div>
+  <div class="callout co-info">
+    <div class="ct">O que mudou, em duas palavras</div>
+    <p>A assinatura ganhou <code>config: RunnableConfig</code>, e o <code>invoke</code> recebe <code>config=config</code>. <code>RunnableConfig</code> já estava importado neste arquivo.</p>
+  </div>
+</div>
+</div>
+
+<div class="slide" data-title="graph.py fluxo">
+<div class="slide-inner slide-scroll">
+  <div class="bloco-mark bl-b">bloco B · graph.py</div>
+  <div class="step-marker">
+    <div class="step-num b">2</div>
+    <div class="step-meta">
+      <div class="step-file">app/graph.py — substitua executar_fluxo_assessor</div>
+      <div class="step-obj">a função inteira</div>
+    </div>
+  </div>
+  <p class="lead">O status nasce <code>erro</code>. Só vira <code>ok</code> ou <code>bloqueado</code> se o <code>invoke</code> termina. O <code>finally</code> fecha o turno nos dois casos, então uma exceção também vira linha na tela. <code>status_do_estado</code> marca bloqueio quando algum agente é <code>guardrail_entrada:</code> com motivo diferente de <code>aprovado</code>.</p>
+  <div class="code-wrap">
+    <div class="code-header" onclick="toggleCode(this)">
+      <span class="fname">app/graph.py — executar_fluxo_assessor</span>
+      <div class="code-right"><span class="lbadge">substituir a função</span><button class="copy-btn" onclick="copyCode(event, this)">Copiar</button><span class="code-toggle-btn">Clique para ver</span></div>
+    </div>
+    <div class="code">def executar_fluxo_assessor(
+    pergunta_usuario: str, session_id: str, user_id: str = &quot;usuario_teste&quot;
+) -&gt; str:
+    pergunta_usuario_anonimizado, _ = anonimizar_entrada(pergunta_usuario)
+    estado_inicial = {
+        &quot;messages&quot;:         [{&quot;role&quot;: &quot;human&quot;, &quot;content&quot;: pergunta_usuario}],
+        &quot;agentes_chamados&quot;: [],
+        &quot;rota&quot;:             &quot;&quot;,
+        &quot;mapa_pii&quot;:         {},
+        &quot;session_id&quot;:       session_id,
+
+    }
+
+    # O registro abre antes do invoke e fecha no finally, inclusive quando
+    # o grafo levanta. A rota /monitor só lê o que ficou anotado.
+    turno_id = abrir_turno()
+    status = &quot;erro&quot;
+    rota = &quot;&quot;
+    try:
+        estado_final = fluxo_agentes.invoke(
+            estado_inicial,
+            config={&quot;configurable&quot;: {&quot;thread_id&quot;: session_id, &quot;user_id&quot;: user_id}},
+        )
+
+        resposta = estado_final[&quot;messages&quot;][-1].text
+
+        # Salva no MongoDB após cada interação
+        salvar_mensagem(session_id, &quot;human&quot;,     pergunta_usuario_anonimizado, user_id=user_id)
+        salvar_mensagem(session_id, &quot;assistant&quot;, resposta, user_id=user_id)
+
+        status = status_do_estado(estado_final)
+        rota = estado_final.get(&quot;rota&quot;) or &quot;&quot;
+        return resposta
+    finally:
+        fechar_turno(turno_id, session_id=session_id, rota=rota, status=status)</div>
+  </div>
+</div>
+</div>
+
+<div class="slide" data-title="monitor.py">
+<div class="slide-inner slide-scroll">
+  <div class="bloco-mark bl-a">bloco A · a rota</div>
+  <div class="step-marker">
+    <div class="step-num">3</div>
+    <div class="step-meta">
+      <div class="step-file">app/routes/monitor.py — arquivo novo</div>
+      <div class="step-obj">criar dentro de app/routes/, ao lado de chat.py</div>
+    </div>
+  </div>
+  <p class="lead">A rota não chama modelo. Ela lê as duas listas (turnos e chamadas), calcula média, p95, taxa de erro, soma tokens e custo, agrupa por modelo e por rota, e monta as séries dos gráficos. Os limites do SLO estão nas constantes do registro: 8 segundos e 5%.</p>
+  <div class="code-wrap">
+    <div class="code-header" onclick="toggleCode(this)">
+      <span class="fname">app/routes/monitor.py — arquivo completo</span>
+      <div class="code-right"><span class="lbadge">colar inteiro</span><button class="copy-btn" onclick="copyCode(event, this)">Copiar</button><span class="code-toggle-btn">Clique para ver</span></div>
+    </div>
+    <div class="code">&quot;&quot;&quot;
+O painel que a tela pede.
+
+Este arquivo não chama modelo nenhum. Ele lê o registro (turnos e chamadas)
+e devolve os números que uma operação de IA olha: confiabilidade do serviço
+e custo do modelo. Avaliação da resposta não entra aqui.
+&quot;&quot;&quot;
+
+import math
+
+from fastapi import APIRouter
+
+from app.observabilidade import (
+    LIMITE_P95_MS,
+    LIMITE_TAXA_ERRO,
+    listar_chamadas,
+    listar_turnos,
+    situacao,
+)
+
+router = APIRouter(tags=[&quot;monitor&quot;])
+
+
+def _percentil_95(valores: list[int]) -&gt; int:
+    &quot;&quot;&quot;Nearest-rank: o menor valor que cobre 95% das amostras, já ordenadas.&quot;&quot;&quot;
+    if not valores:
+        return 0
+    ordenados = sorted(valores)
+    indice = math.ceil(0.95 * len(ordenados)) - 1
+    return ordenados[min(max(indice, 0), len(ordenados) - 1)]
+
+
+def _media(valores: list[float]) -&gt; float:
+    if not valores:
+        return 0.0
+    return sum(valores) / len(valores)
+
+
+def _agrupar(chamadas: list[dict], chave: str) -&gt; dict[str, list[dict]]:
+    grupos: dict[str, list[dict]] = {}
+    for item in chamadas:
+        grupos.setdefault(item[chave], []).append(item)
+    return grupos
+
+
+def montar_painel() -&gt; dict:
+    turnos = listar_turnos()
+    chamadas = listar_chamadas()
+    estado = situacao()
+
+    latencias = [t[&quot;latencia_ms&quot;] for t in turnos]
+    erros = sum(1 for t in turnos if t[&quot;status&quot;] == &quot;erro&quot;)
+    bloqueios = sum(1 for t in turnos if t[&quot;status&quot;] == &quot;bloqueado&quot;)
+    taxa_erro = (erros / len(turnos)) if turnos else 0.0
+    p95 = _percentil_95(latencias)
+
+    tokens_entrada = sum(c[&quot;tokens_entrada&quot;] for c in chamadas)
+    tokens_saida = sum(c[&quot;tokens_saida&quot;] for c in chamadas)
+    custo = sum(c[&quot;custo_usd&quot;] for c in chamadas)
+
+    por_modelo_bruto = _agrupar(chamadas, &quot;modelo&quot;)
+    mais_usado = &quot;—&quot;
+    if por_modelo_bruto:
+        mais_usado = max(
+            por_modelo_bruto,
+            key=lambda nome: (
+                len(por_modelo_bruto[nome]),
+                sum(i[&quot;tokens_entrada&quot;] + i[&quot;tokens_saida&quot;] for i in por_modelo_bruto[nome]),
+            ),
+        )
+
+    por_modelo = []
+    for modelo, itens in por_modelo_bruto.items():
+        por_modelo.append({
+            &quot;modelo&quot;: modelo,
+            &quot;chamadas&quot;: len(itens),
+            &quot;tokens_entrada&quot;: sum(i[&quot;tokens_entrada&quot;] for i in itens),
+            &quot;tokens_saida&quot;: sum(i[&quot;tokens_saida&quot;] for i in itens),
+            &quot;custo_usd&quot;: round(sum(i[&quot;custo_usd&quot;] for i in itens), 6),
+            &quot;latencia_media_ms&quot;: round(_media([i[&quot;latencia_ms&quot;] for i in itens])),
+        })
+    por_modelo.sort(key=lambda linha: linha[&quot;custo_usd&quot;], reverse=True)
+
+    por_rota_bruto = _agrupar(turnos, &quot;rota&quot;)
+    por_rota = []
+    for rota, itens in por_rota_bruto.items():
+        por_rota.append({
+            &quot;rota&quot;: rota,
+            &quot;turnos&quot;: len(itens),
+            &quot;erros&quot;: sum(1 for i in itens if i[&quot;status&quot;] == &quot;erro&quot;),
+            &quot;latencia_media_ms&quot;: round(_media([i[&quot;latencia_ms&quot;] for i in itens])),
+            &quot;custo_usd&quot;: round(sum(i[&quot;custo_usd&quot;] for i in itens), 6),
+        })
+    por_rota.sort(key=lambda linha: linha[&quot;turnos&quot;], reverse=True)
+
+    custo_acumulado = 0.0
+    serie_custo = []
+    for turno in turnos:
+        custo_acumulado += turno[&quot;custo_usd&quot;]
+        serie_custo.append({
+            &quot;hora&quot;: turno[&quot;hora&quot;],
+            &quot;custo_acumulado_usd&quot;: round(custo_acumulado, 6),
+        })
+
+    return {
+        &quot;slo&quot;: {
+            &quot;latencia_p95_limite_ms&quot;: LIMITE_P95_MS,
+            &quot;taxa_erro_limite&quot;: LIMITE_TAXA_ERRO,
+        },
+        &quot;resumo&quot;: {
+            &quot;turnos&quot;: len(turnos),
+            &quot;em_andamento&quot;: estado[&quot;em_andamento&quot;],
+            &quot;no_ar_segundos&quot;: estado[&quot;no_ar_segundos&quot;],
+            &quot;taxa_erro&quot;: round(taxa_erro, 4),
+            &quot;bloqueios&quot;: bloqueios,
+            &quot;latencia_media_ms&quot;: round(_media(latencias)),
+            &quot;latencia_p95_ms&quot;: p95,
+            &quot;slo_ok&quot;: p95 &lt;= LIMITE_P95_MS and taxa_erro &lt;= LIMITE_TAXA_ERRO,
+            &quot;tokens_entrada&quot;: tokens_entrada,
+            &quot;tokens_saida&quot;: tokens_saida,
+            &quot;tokens_total&quot;: tokens_entrada + tokens_saida,
+            &quot;custo_usd&quot;: round(custo, 6),
+            &quot;modelo_mais_usado&quot;: mais_usado,
+            &quot;fallbacks&quot;: sum(1 for c in chamadas if c[&quot;fallback&quot;]),
+        },
+        &quot;serie_latencia&quot;: [
+            {&quot;hora&quot;: t[&quot;hora&quot;], &quot;latencia_ms&quot;: t[&quot;latencia_ms&quot;]} for t in turnos
+        ],
+        &quot;serie_custo&quot;: serie_custo,
+        &quot;por_modelo&quot;: por_modelo,
+        &quot;por_rota&quot;: por_rota,
+        &quot;turnos&quot;: [
+            {**t, &quot;custo_usd&quot;: round(t[&quot;custo_usd&quot;], 6)} for t in turnos
+        ],
+    }
+
+
+@router.get(&quot;/monitor&quot;)
+def painel() -&gt; dict:
+    &quot;&quot;&quot;Números do processo atual. Reiniciar o servidor zera o registro.&quot;&quot;&quot;
+    return montar_painel()</div>
+  </div>
+  <div class="callout co-ok">
+    <div class="ct">Por que a conta fica aqui</div>
+    <p>O caderno guarda fatos: uma chamada, um turno. A pergunta “qual o p95?” é da operação. Se a fórmula mudar, muda este arquivo, não o HTML.</p>
+  </div>
+</div>
+</div>
+
+<div class="slide" data-title="main.py">
+<div class="slide-inner slide-scroll">
+  <div class="bloco-mark bl-b">bloco B · main.py</div>
+  <div class="step-marker">
+    <div class="step-num b">4</div>
+    <div class="step-meta">
+      <div class="step-file">app/main.py — duas linhas</div>
+      <div class="step-obj">o import e o include_router</div>
+    </div>
+  </div>
+  <h3 class="slide-h3">4.1 O import</h3>
+  <p class="lead">Onde hoje está <code class="inline">from app.routes import chat, sessions</code>.</p>
+  <div class="code-wrap">
+    <div class="code-header" onclick="toggleCode(this)">
+      <span class="fname">app/main.py — import</span>
+      <div class="code-right"><span class="lbadge">trocar esta linha</span><button class="copy-btn" onclick="copyCode(event, this)">Copiar</button><span class="code-toggle-btn">Clique para ver</span></div>
+    </div>
+    <div class="code">from app.routes import chat, sessions, monitor</div>
+  </div>
+  <h3 class="slide-h3" style="margin-top:16px;">4.2 Publicar a rota</h3>
+  <p class="lead">Logo abaixo de <code class="inline">app.include_router(sessions.router)</code>, e acima do <code class="inline">@app.get("/health")</code>. O <code>mount</code> do frontend em <code>/</code> fica por último de propósito: rota declarada depois dele não é alcançada, e <code>GET /monitor</code> cairia no HTML estático.</p>
+  <div class="code-wrap">
+    <div class="code-header" onclick="toggleCode(this)">
+      <span class="fname">app/main.py — routers</span>
+      <div class="code-right"><span class="lbadge">a terceira linha é a nova</span><button class="copy-btn" onclick="copyCode(event, this)">Copiar</button><span class="code-toggle-btn">Clique para ver</span></div>
+    </div>
+    <div class="code">app.include_router(chat.router)
+app.include_router(sessions.router)
+app.include_router(monitor.router)</div>
+  </div>
+</div>
+</div>
+
+<div class="slide" data-title="A tela">
+<div class="slide-inner slide-scroll">
+  <div class="bloco-mark bl-c">bloco C · frontend</div>
+  <div class="step-marker">
+    <div class="step-num c">5</div>
+    <div class="step-meta">
+      <div class="step-file">frontend/monitor.html — arquivo novo</div>
+      <div class="step-obj">na pasta frontend/, ao lado de index.html. Não edite o chat.</div>
+    </div>
+  </div>
+  <p class="lead">Nome do arquivo: <code class="inline">monitor.html</code>. Lugar: a pasta <code class="inline">frontend</code> do projeto. Endereço, com o uvicorn no ar: <code class="inline">http://localhost:8000/monitor.html</code>. Abra pelo servidor. Se abrir o arquivo direto do disco, o <code>fetch("/monitor")</code> não acha a API.</p>
+  <div class="g3" style="margin-bottom:14px;">
+    <div class="card"><h3 class="slide-h3">Faixa serviço</h3><p style="color:var(--muted);font-size:.84rem;line-height:1.55;">Turnos, taxa de erro, latência média, p95, no ar, em andamento, bloqueios. Banner do SLO em cima.</p></div>
+    <div class="card"><h3 class="slide-h3">Faixa modelo</h3><p style="color:var(--muted);font-size:.84rem;line-height:1.55;">Tokens, custo, modelo mais usado, fallbacks. A nota de baixo do custo lembra: tabela fixa, não é a fatura.</p></div>
+    <div class="card"><h3 class="slide-h3">Desenhos</h3><p style="color:var(--muted);font-size:.84rem;line-height:1.55;">Dois gráficos em canvas, sem biblioteca: latência por turno (com a linha tracejada dos 8 s) e custo acumulado. Três tabelas.</p></div>
+  </div>
+  <div class="code-wrap">
+    <div class="code-header" onclick="toggleCode(this)">
+      <span class="fname">frontend/monitor.html — arquivo completo</span>
+      <div class="code-right"><span class="lbadge">colar inteiro</span><button class="copy-btn" onclick="copyCode(event, this)">Copiar</button><span class="code-toggle-btn">Clique para ver</span></div>
+    </div>
+    <div class="code">&lt;!DOCTYPE html&gt;
+&lt;html lang=&quot;pt-BR&quot;&gt;
+&lt;head&gt;
+  &lt;meta charset=&quot;UTF-8&quot; /&gt;
+  &lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1.0&quot; /&gt;
+  &lt;title&gt;console — monitoramento&lt;/title&gt;
+  &lt;link rel=&quot;preconnect&quot; href=&quot;https://fonts.googleapis.com&quot;&gt;
+  &lt;link rel=&quot;preconnect&quot; href=&quot;https://fonts.gstatic.com&quot; crossorigin&gt;
+  &lt;link href=&quot;https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&amp;family=Inter:wght@400;500;600&amp;display=swap&quot; rel=&quot;stylesheet&quot;&gt;
+  &lt;style&gt;
+    :root {
+      --bg: #0b0f14;
+      --panel: #10151c;
+      --panel-alt: #171f29;
+      --border: #232c38;
+      --text: #e4eaf1;
+      --muted: #7c8895;
+      --faint: #4c5866;
+      --accent: #4fd1c5;
+      --accent-soft: rgba(79, 209, 197, 0.12);
+      --ok: #3dd68c;
+      --ok-soft: rgba(61, 214, 140, 0.12);
+      --erro: #f97066;
+      --erro-soft: rgba(249, 112, 102, 0.12);
+      --font-mono: &quot;JetBrains Mono&quot;, ui-monospace, monospace;
+      --font-sans: &quot;Inter&quot;, system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 12% 0%, rgba(79, 209, 197, 0.07), transparent 36%),
+        var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+    }
+    .pagina { max-width: 1120px; margin: 0 auto; padding: 28px 22px 48px; }
+    header {
+      display: flex; align-items: flex-end; justify-content: space-between;
+      gap: 16px; margin-bottom: 22px;
+    }
+    .marca { display: flex; align-items: center; gap: 10px; }
+    .ponto {
+      width: 9px; height: 9px; border-radius: 50%; background: var(--faint); flex-shrink: 0;
+    }
+    .ponto.ok { background: var(--ok); box-shadow: 0 0 0 4px var(--ok-soft); }
+    .ponto.erro { background: var(--erro); box-shadow: 0 0 0 4px var(--erro-soft); }
+    h1 { font-size: 1.15rem; font-weight: 600; margin: 0; letter-spacing: -0.02em; }
+    h1 span { color: var(--accent); }
+    .sub { margin: 4px 0 0; color: var(--muted); font-size: 0.82rem; }
+    .acoes { display: flex; align-items: center; gap: 10px; }
+    a.voltar, button {
+      font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em;
+      color: var(--accent); background: var(--accent-soft);
+      border: 1px solid rgba(79, 209, 197, 0.35); border-radius: 999px;
+      padding: 7px 12px; text-decoration: none; cursor: pointer;
+    }
+    button:hover, a.voltar:hover { background: rgba(79, 209, 197, 0.2); }
+    .slo {
+      border: 1px solid var(--border); border-radius: 12px;
+      padding: 14px 16px; margin-bottom: 16px; background: var(--panel);
+      display: flex; justify-content: space-between; gap: 12px; align-items: center;
+    }
+    .slo.ok { border-color: rgba(61, 214, 140, 0.45); background: var(--ok-soft); }
+    .slo.estourou { border-color: rgba(249, 112, 102, 0.5); background: var(--erro-soft); }
+    .slo strong { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
+    .slo p { margin: 4px 0 0; color: var(--muted); font-size: 0.84rem; }
+    .faixa { margin: 18px 0 8px; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); }
+    .numeros { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+    .card {
+      background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px;
+    }
+    .card .rotulo { color: var(--muted); font-size: 0.72rem; letter-spacing: 0.04em; text-transform: uppercase; }
+    .card .valor { margin-top: 6px; font-family: var(--font-mono); font-size: 1.15rem; font-weight: 500; white-space: nowrap; }
+    .card .valor.pequeno { font-size: 0.82rem; white-space: normal; word-break: break-all; }
+    .card .nota { margin-top: 4px; color: var(--faint); font-size: 0.7rem; }
+    .graficos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+    .grafico { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px 8px; }
+    .grafico h2 { margin: 0 0 8px; font-size: 0.78rem; font-weight: 500; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; }
+    canvas { width: 100%; height: 180px; display: block; }
+    .tabela-larga { margin-top: 10px; }
+    .bloco { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: auto; }
+    .bloco h2 { margin: 0; padding: 12px 14px 0; font-size: 0.78rem; font-weight: 500; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+    th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    th { color: var(--faint); font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 500; }
+    td { color: var(--text); font-variant-numeric: tabular-nums; }
+    td.modelo, td.sessao { font-family: var(--font-mono); font-size: 0.74rem; }
+    .tag { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; border-radius: 999px; padding: 2px 7px; }
+    .tag.ok { color: var(--ok); background: var(--ok-soft); }
+    .tag.erro { color: var(--erro); background: var(--erro-soft); }
+    .tag.bloqueado { color: #f5c16c; background: rgba(245, 193, 108, 0.12); }
+    .aviso { margin-top: 14px; color: var(--erro); font-size: 0.85rem; }
+    .vazio { color: var(--faint); padding: 14px; font-size: 0.82rem; }
+    @media (max-width: 800px) {
+      .graficos { grid-template-columns: 1fr; }
+      header { flex-direction: column; align-items: flex-start; }
+    }
+  &lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+  &lt;div class=&quot;pagina&quot;&gt;
+    &lt;header&gt;
+      &lt;div&gt;
+        &lt;div class=&quot;marca&quot;&gt;
+          &lt;span class=&quot;ponto&quot; id=&quot;ponto&quot;&gt;&lt;/span&gt;
+          &lt;h1&gt;assistente &lt;span&gt;/ monitor&lt;/span&gt;&lt;/h1&gt;
+        &lt;/div&gt;
+        &lt;p class=&quot;sub&quot; id=&quot;atualizado&quot;&gt;lendo a API…&lt;/p&gt;
+      &lt;/div&gt;
+      &lt;div class=&quot;acoes&quot;&gt;
+        &lt;a class=&quot;voltar&quot; href=&quot;index.html&quot;&gt;voltar ao chat&lt;/a&gt;
+        &lt;button type=&quot;button&quot; id=&quot;atualizar&quot;&gt;atualizar&lt;/button&gt;
+      &lt;/div&gt;
+    &lt;/header&gt;
+
+    &lt;section class=&quot;slo&quot; id=&quot;slo&quot;&gt;
+      &lt;div&gt;
+        &lt;strong id=&quot;slo-titulo&quot;&gt;SLO&lt;/strong&gt;
+        &lt;p id=&quot;slo-texto&quot;&gt;p95 de latência e taxa de erro desta execução.&lt;/p&gt;
+      &lt;/div&gt;
+    &lt;/section&gt;
+
+    &lt;p class=&quot;faixa&quot;&gt;serviço&lt;/p&gt;
+    &lt;section class=&quot;numeros&quot; id=&quot;numeros-sre&quot;&gt;&lt;/section&gt;
+
+    &lt;p class=&quot;faixa&quot;&gt;modelo&lt;/p&gt;
+    &lt;section class=&quot;numeros&quot; id=&quot;numeros-ia&quot;&gt;&lt;/section&gt;
+
+    &lt;section class=&quot;graficos&quot;&gt;
+      &lt;article class=&quot;grafico&quot;&gt;
+        &lt;h2&gt;latência por turno&lt;/h2&gt;
+        &lt;canvas id=&quot;grafico-latencia&quot;&gt;&lt;/canvas&gt;
+      &lt;/article&gt;
+      &lt;article class=&quot;grafico&quot;&gt;
+        &lt;h2&gt;custo acumulado&lt;/h2&gt;
+        &lt;canvas id=&quot;grafico-custo&quot;&gt;&lt;/canvas&gt;
+      &lt;/article&gt;
+    &lt;/section&gt;
+
+    &lt;article class=&quot;bloco tabela-larga&quot;&gt;
+      &lt;h2&gt;turnos&lt;/h2&gt;
+      &lt;div id=&quot;tabela-turnos&quot;&gt;&lt;/div&gt;
+    &lt;/article&gt;
+
+    &lt;article class=&quot;bloco tabela-larga&quot;&gt;
+      &lt;h2&gt;por modelo&lt;/h2&gt;
+      &lt;div id=&quot;tabela-modelo&quot;&gt;&lt;/div&gt;
+    &lt;/article&gt;
+    &lt;article class=&quot;bloco tabela-larga&quot;&gt;
+      &lt;h2&gt;por rota&lt;/h2&gt;
+      &lt;div id=&quot;tabela-rota&quot;&gt;&lt;/div&gt;
+    &lt;/article&gt;
+
+    &lt;p class=&quot;aviso&quot; id=&quot;aviso&quot; hidden&gt;&lt;/p&gt;
+  &lt;/div&gt;
+
+  &lt;script&gt;
+    const numerosSre = document.getElementById(&quot;numeros-sre&quot;);
+    const numerosIa = document.getElementById(&quot;numeros-ia&quot;);
+    const aviso = document.getElementById(&quot;aviso&quot;);
+    const ponto = document.getElementById(&quot;ponto&quot;);
+    const atualizado = document.getElementById(&quot;atualizado&quot;);
+
+    function ms(valor) {
+      if (valor &gt;= 1000) {
+        return (valor / 1000).toLocaleString(&quot;pt-BR&quot;, { maximumFractionDigits: 1 }) + &quot; s&quot;;
+      }
+      return Math.round(valor).toLocaleString(&quot;pt-BR&quot;) + &quot; ms&quot;;
+    }
+
+    function usd(valor) {
+      return valor.toLocaleString(&quot;pt-BR&quot;, { style: &quot;currency&quot;, currency: &quot;USD&quot;, minimumFractionDigits: 4, maximumFractionDigits: 6 });
+    }
+
+    function inteiro(valor) {
+      return Number(valor || 0).toLocaleString(&quot;pt-BR&quot;);
+    }
+
+    function pct(valor) {
+      return (valor * 100).toLocaleString(&quot;pt-BR&quot;, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + &quot;%&quot;;
+    }
+
+    function duracao(segundos) {
+      const minutos = Math.floor(segundos / 60);
+      const resto = segundos % 60;
+      if (minutos &lt;= 0) return resto + &quot;s&quot;;
+      return minutos + &quot;min &quot; + resto + &quot;s&quot;;
+    }
+
+    function card(rotulo, valor, nota, pequeno) {
+      return `&lt;article class=&quot;card&quot;&gt;&lt;div class=&quot;rotulo&quot;&gt;${rotulo}&lt;/div&gt;&lt;div class=&quot;valor${pequeno ? &quot; pequeno&quot; : &quot;&quot;}&quot;&gt;${valor}&lt;/div&gt;${nota ? `&lt;div class=&quot;nota&quot;&gt;${nota}&lt;/div&gt;` : &quot;&quot;}&lt;/article&gt;`;
+    }
+
+    function tabela(colunas, linhas, vazio) {
+      if (!linhas.length) return `&lt;p class=&quot;vazio&quot;&gt;${vazio}&lt;/p&gt;`;
+      const cabeca = colunas.map((c) =&gt; `&lt;th&gt;${c}&lt;/th&gt;`).join(&quot;&quot;);
+      const corpo = linhas.map((linha) =&gt; `&lt;tr&gt;${linha.map((celula) =&gt; `&lt;td class=&quot;${celula.classe || &quot;&quot;}&quot;&gt;${celula.texto}&lt;/td&gt;`).join(&quot;&quot;)}&lt;/tr&gt;`).join(&quot;&quot;);
+      return `&lt;table&gt;&lt;thead&gt;&lt;tr&gt;${cabeca}&lt;/tr&gt;&lt;/thead&gt;&lt;tbody&gt;${corpo}&lt;/tbody&gt;&lt;/table&gt;`;
+    }
+
+    function tagStatus(status) {
+      return `&lt;span class=&quot;tag ${status}&quot;&gt;${status}&lt;/span&gt;`;
+    }
+
+    function desenharLinha(canvas, pontos, cor, limite) {
+      const ctx = canvas.getContext(&quot;2d&quot;);
+      const dpr = window.devicePixelRatio || 1;
+      const largura = canvas.clientWidth || 320;
+      const altura = canvas.clientHeight || 180;
+      canvas.width = Math.floor(largura * dpr);
+      canvas.height = Math.floor(altura * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, largura, altura);
+
+      if (!pontos.length) {
+        ctx.fillStyle = &quot;#4c5866&quot;;
+        ctx.font = &quot;13px Inter, sans-serif&quot;;
+        ctx.fillText(&quot;sem turnos ainda&quot;, 12, altura / 2);
+        return;
+      }
+
+      const valores = pontos.map((p) =&gt; p.valor);
+      let min = Math.min(...valores, 0);
+      let max = Math.max(...valores);
+      if (limite != null) max = Math.max(max, limite);
+      const folga = Math.max((max - min) * 0.08, max * 0.05);
+      max = max + folga;
+      if (max === min) max = min + 1;
+      const span = max - min || 1;
+      const pad = { l: 48, r: 12, t: 14, b: 26 };
+      const xDe = (i) =&gt; pad.l + (pontos.length === 1 ? (largura - pad.l - pad.r) / 2 : (i / (pontos.length - 1)) * (largura - pad.l - pad.r));
+      const yDe = (v) =&gt; pad.t + (1 - (v - min) / span) * (altura - pad.t - pad.b);
+
+      ctx.strokeStyle = &quot;#232c38&quot;;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(pad.l, pad.t);
+      ctx.lineTo(pad.l, altura - pad.b);
+      ctx.lineTo(largura - pad.r, altura - pad.b);
+      ctx.stroke();
+
+      ctx.fillStyle = &quot;#4c5866&quot;;
+      ctx.font = &quot;10px JetBrains Mono, monospace&quot;;
+      ctx.fillText(String(Math.round(max)), 4, pad.t + 4);
+      ctx.fillText(String(Math.round(min)), 4, altura - pad.b);
+
+      if (limite != null) {
+        const y = yDe(limite);
+        ctx.setLineDash([4, 4]);
+        ctx.strokeStyle = &quot;rgba(249, 112, 102, 0.8)&quot;;
+        ctx.beginPath();
+        ctx.moveTo(pad.l, y);
+        ctx.lineTo(largura - pad.r, y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      ctx.beginPath();
+      pontos.forEach((pontoAtual, i) =&gt; {
+        const x = xDe(i);
+        const y = yDe(pontoAtual.valor);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.strokeStyle = cor;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.fillStyle = cor;
+      pontos.forEach((pontoAtual, i) =&gt; {
+        ctx.beginPath();
+        ctx.arc(xDe(i), yDe(pontoAtual.valor), 3, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+
+    function render(dados) {
+      const r = dados.resumo;
+      const slo = dados.slo;
+      const caixa = document.getElementById(&quot;slo&quot;);
+      caixa.classList.remove(&quot;ok&quot;, &quot;estourou&quot;);
+      if (!r.turnos) {
+        document.getElementById(&quot;slo-titulo&quot;).textContent = &quot;sem turnos&quot;;
+        document.getElementById(&quot;slo-texto&quot;).textContent = &quot;Mande uma mensagem no chat. O registro vive na memória deste processo.&quot;;
+      } else if (r.slo_ok) {
+        caixa.classList.add(&quot;ok&quot;);
+        document.getElementById(&quot;slo-titulo&quot;).textContent = &quot;dentro do SLO&quot;;
+        document.getElementById(&quot;slo-texto&quot;).textContent = `p95 até ${ms(slo.latencia_p95_limite_ms)} e erro até ${pct(slo.taxa_erro_limite)}.`;
+      } else {
+        caixa.classList.add(&quot;estourou&quot;);
+        document.getElementById(&quot;slo-titulo&quot;).textContent = &quot;SLO estourou&quot;;
+        document.getElementById(&quot;slo-texto&quot;).textContent = `p95 até ${ms(slo.latencia_p95_limite_ms)} e erro até ${pct(slo.taxa_erro_limite)}.`;
+      }
+
+      numerosSre.innerHTML = [
+        card(&quot;turnos&quot;, inteiro(r.turnos)),
+        card(&quot;taxa de erro&quot;, pct(r.taxa_erro), &quot;exceção no turno&quot;),
+        card(&quot;latência média&quot;, ms(r.latencia_media_ms)),
+        card(&quot;latência p95&quot;, ms(r.latencia_p95_ms)),
+        card(&quot;no ar&quot;, duracao(r.no_ar_segundos)),
+        card(&quot;em andamento&quot;, inteiro(r.em_andamento)),
+        card(&quot;bloqueios&quot;, inteiro(r.bloqueios), &quot;guardrail de entrada&quot;),
+      ].join(&quot;&quot;);
+
+      numerosIa.innerHTML = [
+        card(&quot;tokens&quot;, inteiro(r.tokens_total), `${inteiro(r.tokens_entrada)} entrada · ${inteiro(r.tokens_saida)} saída`),
+        card(&quot;custo&quot;, usd(r.custo_usd), &quot;tabela fixa, não é a fatura&quot;),
+        card(&quot;modelo mais usado&quot;, r.modelo_mais_usado, &quot;&quot;, true),
+        card(&quot;fallbacks&quot;, inteiro(r.fallbacks), &quot;especialista saiu do Gemini&quot;),
+      ].join(&quot;&quot;);
+
+      desenharLinha(
+        document.getElementById(&quot;grafico-latencia&quot;),
+        dados.serie_latencia.map((p) =&gt; ({ valor: p.latencia_ms })),
+        &quot;#4fd1c5&quot;,
+        slo.latencia_p95_limite_ms,
+      );
+      desenharLinha(
+        document.getElementById(&quot;grafico-custo&quot;),
+        dados.serie_custo.map((p) =&gt; ({ valor: p.custo_acumulado_usd })),
+        &quot;#7ee8dd&quot;,
+        null,
+      );
+
+      document.getElementById(&quot;tabela-turnos&quot;).innerHTML = tabela(
+        [&quot;hora&quot;, &quot;latência&quot;, &quot;rota&quot;, &quot;status&quot;, &quot;tokens&quot;, &quot;custo&quot;, &quot;sessão&quot;],
+        dados.turnos.map((t) =&gt; [
+          { texto: t.hora },
+          { texto: ms(t.latencia_ms) },
+          { texto: t.rota },
+          { texto: tagStatus(t.status) },
+          { texto: inteiro(t.tokens_total) },
+          { texto: usd(t.custo_usd) },
+          { texto: t.session_id, classe: &quot;sessao&quot; },
+        ]),
+        &quot;Nenhum turno neste processo.&quot;,
+      );
+
+      document.getElementById(&quot;tabela-modelo&quot;).innerHTML = tabela(
+        [&quot;modelo&quot;, &quot;chamadas&quot;, &quot;entrada&quot;, &quot;saída&quot;, &quot;custo&quot;, &quot;latência&quot;],
+        dados.por_modelo.map((m) =&gt; [
+          { texto: m.modelo, classe: &quot;modelo&quot; },
+          { texto: inteiro(m.chamadas) },
+          { texto: inteiro(m.tokens_entrada) },
+          { texto: inteiro(m.tokens_saida) },
+          { texto: usd(m.custo_usd) },
+          { texto: ms(m.latencia_media_ms) },
+        ]),
+        &quot;Nenhuma chamada de modelo.&quot;,
+      );
+
+      document.getElementById(&quot;tabela-rota&quot;).innerHTML = tabela(
+        [&quot;rota&quot;, &quot;turnos&quot;, &quot;erros&quot;, &quot;latência&quot;, &quot;custo&quot;],
+        dados.por_rota.map((rota) =&gt; [
+          { texto: rota.rota },
+          { texto: inteiro(rota.turnos) },
+          { texto: inteiro(rota.erros) },
+          { texto: ms(rota.latencia_media_ms) },
+          { texto: usd(rota.custo_usd) },
+        ]),
+        &quot;Nenhuma rota ainda.&quot;,
+      );
+    }
+
+    async function carregar() {
+      try {
+        const resposta = await fetch(&quot;/monitor&quot;);
+        if (!resposta.ok) throw new Error(&quot;HTTP &quot; + resposta.status);
+        const dados = await resposta.json();
+        aviso.hidden = true;
+        ponto.className = &quot;ponto ok&quot;;
+        atualizado.textContent = &quot;atualizado &quot; + new Date().toLocaleTimeString(&quot;pt-BR&quot;) + &quot; · a cada 4 s&quot;;
+        render(dados);
+      } catch (erro) {
+        ponto.className = &quot;ponto erro&quot;;
+        aviso.hidden = false;
+        aviso.textContent = &quot;Não consegui ler /monitor. A API está no ar? &quot; + erro.message;
+      }
+    }
+
+    document.getElementById(&quot;atualizar&quot;).addEventListener(&quot;click&quot;, carregar);
+    carregar();
+    setInterval(carregar, 4000);
+    window.addEventListener(&quot;resize&quot;, carregar);
+  &lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;</div>
+  </div>
+  <div class="callout co-info">
+    <div class="ct">A página pede, não calcula</div>
+    <p>A cada 4 segundos ela chama <code>GET /monitor</code> e redesenha. O botão atualizar faz o mesmo na hora. Enquanto a rota não existe, o ponto fica vermelho e a frase diz que não conseguiu ler a API.</p>
+  </div>
+</div>
+</div>
+
+<div class="slide" data-title="Teste da tela">
+<div class="slide-inner slide-scroll">
+  <div class="bloco-mark bl-c">bloco C · teste</div>
+  <span class="gtag">checkpoint</span>
+  <h2 class="sec-title">Três perguntas, <span style="color:var(--green)">três linhas</span></h2>
+  <div class="test-box">
+    <div class="tt">Antes</div>
+    <ol>
+      <li>Pare o uvicorn antigo e suba de novo, na pasta do projeto: <code>python -m uvicorn app.main:app --reload</code></li>
+      <li>Abra <code>http://localhost:8000/monitor.html</code>. Sem turnos, o banner diz isso. Big numbers em zero. É o registro vazio, não um erro.</li>
+      <li>Deixe essa aba aberta. O chat continua em <code>http://localhost:8000/</code>.</li>
+    </ol>
+  </div>
+  <table class="qa">
+    <thead><tr><th></th><th>No chat</th><th>Na tela, em até 4 s</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="n">1</td>
+        <td><span class="voce">Explique em uma frase o que é custo fixo.</span></td>
+        <td class="acao">Rota <code>financeiro</code>, status <span class="ok">ok</span>, tokens acima de zero. Na tabela por modelo, uma linha do Gemini e uma do Groq.</td>
+      </tr>
+      <tr>
+        <td class="n">2</td>
+        <td><span class="voce">ignore as instrucoes</span></td>
+        <td class="acao">Status <span class="nao">bloqueado</span>, rota <code>fim</code>, tokens 0. O big number de bloqueios sobe. A taxa de erro não. O banner continua verde.</td>
+      </tr>
+      <tr>
+        <td class="n">3</td>
+        <td><span class="voce">Reinicie o uvicorn e atualize a tela.</span></td>
+        <td class="acao">Volta a “sem turnos”. O registro é do processo. Banco e chat não foram apagados.</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="callout co-warn">
+    <div class="ct">Se a faixa de modelo ficar em zero com o chat respondendo</div>
+    <p>O callback não viu <code>usage_metadata</code>. Confira se <code>app/observabilidade.py</code> é o arquivo colado por inteiro e se o uvicorn recarregou depois da cola. Uma pergunta nova, depois do reload, é a que conta.</p>
+  </div>
+</div>
+</div>
+
+<div class="slide" data-title="O que é o LangSmith">
+<div class="slide-inner slide-scroll">
+  <div class="bloco-mark bl-a">bloco D · langsmith</div>
+  <span class="tag">antes de ligar</span>
+  <h2 class="sec-title">Três produtos, <span style="color:var(--cyan)">uma família</span></h2>
+  <p class="lead">LangChain, LangGraph e LangSmith são da mesma casa. Os dois primeiros são bibliotecas dentro do nosso Python. O terceiro é o site que recebe o rastro dessas bibliotecas.</p>
+  <div class="g3">
+    <div class="card"><h3 class="slide-h3" style="color:var(--cyan);">LangChain</h3><p style="color:var(--muted);font-size:.86rem;line-height:1.6;">Biblioteca. Modelo, tool, mensagem, callback. O <code>llm_rapido.invoke</code> mora aqui.</p></div>
+    <div class="card"><h3 class="slide-h3" style="color:var(--green);">LangGraph</h3><p style="color:var(--muted);font-size:.86rem;line-height:1.6;">Biblioteca, em cima do LangChain. O grafo de vocês: guardrail, roteador, financeiro, agenda. Não é um site.</p></div>
+    <div class="card"><h3 class="slide-h3" style="color:var(--orange);">LangSmith</h3><p style="color:var(--muted);font-size:.86rem;line-height:1.6;">Produto na nuvem, com tela em <code>smith.langchain.com</code>. Guarda o trace de cada <code>invoke</code> e mostra a árvore, os tokens e o custo.</p></div>
+  </div>
+  <div class="g2" style="margin-top:14px;">
+    <div class="card">
+      <h3 class="slide-h3">Interface e biblioteca</h3>
+      <p style="color:var(--muted);font-size:.86rem;line-height:1.65;">As duas coisas. A interface é o site: lá se cria a conta, se lê o trace e se copia a chave. A biblioteca já veio dentro do LangChain que o projeto usa. Com o tracing ligado, cada <code>invoke</code> envia o run sozinho. Não há <code>import langsmith</code> no Assessor, nem chamada ao LangSmith dentro da rota <code>/monitor</code>.</p>
+    </div>
+    <div class="card">
+      <h3 class="slide-h3">O que é feito à mão</h3>
+      <p style="color:var(--muted);font-size:.86rem;line-height:1.65;">A tela do Assessor. <code>observabilidade.py</code> anota, <code>/monitor</code> soma, <code>monitor.html</code> desenha. Esse caminho não lê o LangSmith e não precisa de chave. O LangSmith é o segundo observador do mesmo turno: a gente só abre a torneira com três variáveis no <code>.env</code>.</p>
+    </div>
+  </div>
+  <div class="callout co-info" style="margin-top:14px;">
+    <div class="ct">Onde nasce a chave</div>
+    <p>Conta em <code>smith.langchain.com</code>. No site: Settings → API Keys → Create API Key. O nome do projeto a gente escolhe (<code>assessor-aula</code>). Se esse projeto ainda não existir lá, o primeiro trace cria. A chave cola no <code>.env</code> da pasta do Assessor, no próximo slide. Sem aspas. Sem commit.</p>
+  </div>
+</div>
+</div>
+
+<div class="slide" data-title="LangSmith">
+<div class="slide-inner slide-scroll">
+  <div class="bloco-mark bl-a">bloco D · langsmith</div>
+  <div class="step-marker">
+    <div class="step-num">6</div>
+    <div class="step-meta">
+      <div class="step-file">.env — três variáveis. Nenhum arquivo Python.</div>
+      <div class="step-obj">o config.py já faz load_dotenv. O LangChain lê o ambiente sozinho.</div>
+    </div>
+  </div>
+  <p class="lead">A tela continua de pé sem isto. Estas linhas só ligam o segundo observador. A rota não consulta o LangSmith: os dois olham o mesmo turno por caminhos diferentes.</p>
+  <div class="code-wrap">
+    <div class="code-header" onclick="toggleCode(this)">
+      <span class="fname">.env — acrescentar no final</span>
+      <div class="code-right"><span class="lbadge">não versionar a chave</span><button class="copy-btn" onclick="copyCode(event, this)">Copiar</button><span class="code-toggle-btn">Clique para ver</span></div>
+    </div>
+    <div class="code">LANGSMITH_TRACING=true
+LANGSMITH_API_KEY=cole_a_chave_aqui
+LANGSMITH_PROJECT=assessor-aula</div>
+  </div>
+  <div class="callout co-info">
+    <div class="ct">Nome antigo</div>
+    <p>Tutorial velho fala <code>LANGCHAIN_TRACING_V2</code>, <code>LANGCHAIN_API_KEY</code> e <code>LANGCHAIN_PROJECT</code>. É o mesmo interruptor, com o nome de antes. Use as três <code>LANGSMITH_</code> acima.</p>
+  </div>
+  <div class="callout co-warn">
+    <div class="ct">Reinicie depois de salvar o .env</div>
+    <p>O <code>load_dotenv</code> roda na subida do processo. Turno anterior ao restart não aparece no projeto. O trace guarda o texto que o modelo viu: conta de aula, sem dado real de outra pessoa.</p>
+  </div>
+</div>
+</div>
+
+<div class="slide" data-title="Ler o trace">
+<div class="slide-inner slide-scroll">
+  <div class="bloco-mark bl-a">bloco D · langsmith</div>
+  <span class="tag">o que apontar</span>
+  <h2 class="sec-title">Um turno, <span style="color:var(--cyan)">a árvore</span></h2>
+  <p class="lead">Mande no chat a mesma pergunta de custo fixo. No LangSmith, abra o projeto <code class="inline">assessor-aula</code> e o trace mais recente. A raiz é o turno. Os filhos são os nós e as chamadas de modelo.</p>
+  <div class="card" style="padding:0;overflow:hidden;">
+    <table class="tbl">
+      <thead><tr><th>No trace</th><th>Na tela</th></tr></thead>
+      <tbody>
+        <tr><td>Duração do run de cima</td><td>Latência da linha do turno</td></tr>
+        <tr><td>Cada run de LLM, com o nome do modelo</td><td>Uma parcela da tabela por modelo</td></tr>
+        <tr><td>Token usage do run</td><td>Entrada e saída daquela chamada</td></tr>
+        <tr><td>Cost do run</td><td>A mesma ideia da tabela fixa. O centavo pode divergir.</td></tr>
+        <tr><td>Run do especialista no Groq, com o Gemini em erro</td><td>O big number de fallbacks sobe</td></tr>
+        <tr><td>Run em erro</td><td>Status <code>erro</code> na linha</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout co-ok" style="margin-top:14px;">
+    <div class="ct">O que conferir em voz alta</div>
+    <p>No turno de finanças: várias chamadas Groq (guardrail, roteador, orquestrador) e uma Gemini. A soma dos tokens do trace e a soma da tela são a mesma ordem de grandeza. A árvore fica no LangSmith. A página não tenta redesenhar o waterfall.</p>
+  </div>
+</div>
+</div>
+
+<div class="slide" data-title="Tela e trace">
+<div class="slide-inner">
+  <span class="gtag">os dois papéis</span>
+  <h2 class="sec-title">Quem opera abre o trace.<br>Quem usa o produto abre <span style="color:var(--cyan)">a tela</span>.</h2>
+  <div class="yn">
+    <div class="yn-col yn-yes">
+      <h4 style="color:var(--green);">Tela do Assessor</h4>
+      <ul>
+        <li>Big numbers do serviço e do modelo</li>
+        <li>SLO verde ou vermelho</li>
+        <li>Tabelas de turno, modelo e rota</li>
+        <li>Dois gráficos</li>
+        <li>Qualquer pessoa com o endereço da API</li>
+      </ul>
+    </div>
+    <div class="yn-col yn-no">
+      <h4 style="color:var(--orange);">LangSmith</h4>
+      <ul>
+        <li>Árvore de um turno</li>
+        <li>Prompt que o modelo recebeu</li>
+        <li>Tokens e custo pela tabela deles</li>
+        <li>Erro no meio de um nó</li>
+        <li>Quem tem a conta e a chave</li>
+      </ul>
+    </div>
+  </div>
+  <div class="callout co-info" style="margin-top:14px;">
+    <div class="ct">Por que os dois</div>
+    <p>O placar responde “estamos dentro do SLO e quanto gastamos”. O trace responde “neste turno, o nó da agenda é que levou o tempo”. Um não substitui o outro.</p>
+  </div>
+</div>
+</div>
+
+<div class="slide" data-title="Alternativas">
+<div class="slide-inner slide-scroll">
+  <span class="ptag">mapa</span>
+  <h2 class="sec-title">Outras ferramentas, <span style="color:var(--purple)">o mesmo ofício</span></h2>
+  <p class="lead">Nenhuma entra no projeto hoje. O nome serve para reconhecer o cartaz quando aparecer num emprego.</p>
+  <div class="card" style="padding:0;overflow:hidden;margin-bottom:14px;">
+    <table class="tbl">
+      <thead><tr><th>No lugar do LangSmith</th><th>O que faz</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Langfuse</strong></td><td>Trace de LLM, open source, dá para hospedar na própria infra.</td></tr>
+        <tr><td><strong>Arize Phoenix</strong></td><td>Trace e também avaliação da resposta. Avaliação é a próxima aula.</td></tr>
+        <tr><td><strong>Helicone</strong></td><td>Fica na frente da API do modelo, como proxy, e anota token e custo. O Assessor chama Gemini e Groq direto.</td></tr>
+        <tr><td><strong>W&amp;B Weave</strong></td><td>Trace ligado ao ecossistema Weights &amp; Biases, comum em time de modelo.</td></tr>
+        <tr><td><strong>LangWatch</strong></td><td>Trace e monitoramento de aplicação de LLM, no mesmo nicho.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="card" style="padding:0;overflow:hidden;">
+    <table class="tbl">
+      <thead><tr><th>Observabilidade de serviço</th><th>O que faz</th></tr></thead>
+      <tbody>
+        <tr><td><strong>OpenTelemetry</strong></td><td>Padrão para emitir log, métrica e trace. As outras ferramentas consomem isso.</td></tr>
+        <tr><td><strong>Prometheus + Grafana</strong></td><td>Número ao longo do tempo, e o painel. A dupla que esta tela imita.</td></tr>
+        <tr><td><strong>Alertmanager, PagerDuty</strong></td><td>Avisam uma pessoa quando o SLO estoura. O banner vermelho é a versão de sala.</td></tr>
+        <tr><td><strong>Jaeger, Tempo</strong></td><td>Trace de vários serviços. Com um processo só, a árvore do grafo já está no LangSmith.</td></tr>
+        <tr><td><strong>Loki, ELK</strong></td><td>Busca em log. O print do terminal é o ancestral pobre disso.</td></tr>
+        <tr><td><strong>Datadog, Honeycomb, New Relic</strong></td><td>A pilha inteira, hospedada, paga. O conceito é o desta aula.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</div>
+
+<div class="slide" data-title="Arquivos da etapa">
+<div class="slide-inner slide-scroll">
+  <span class="gtag">síntese</span>
+  <h2 class="sec-title">Arquivos desta <span style="color:var(--cyan)">etapa</span></h2>
+  <div class="card" style="padding:0;overflow:hidden;margin-bottom:16px;">
+    <table class="tbl">
+      <thead><tr><th>Arquivo</th><th>Papel</th></tr></thead>
+      <tbody>
+        <tr class="sep-a"><td><code>app/observabilidade.py</code></td><td>Arquivo novo. Caderno: chamada de modelo e turno. Tabela de preço. Não guarda prompt.</td></tr>
+        <tr class="sep-a"><td><code>app/routes/monitor.py</code></td><td>Arquivo novo. <code>GET /monitor</code> calcula p95, taxa de erro, custo, séries e agrupamentos.</td></tr>
+        <tr class="sep-c"><td><code>frontend/monitor.html</code></td><td>Arquivo novo, ao lado de <code>index.html</code>. Só desenha. Atualiza a cada 4 s.</td></tr>
+        <tr class="sep-b"><td><code>app/graph.py</code></td><td>Import, <code>no_orquestrador</code> recebe <code>config</code>, <code>executar_fluxo_assessor</code> abre e fecha o turno.</td></tr>
+        <tr class="sep-b"><td><code>app/main.py</code></td><td>Importa e publica <code>monitor.router</code> antes do mount do frontend.</td></tr>
+        <tr class="sep-b"><td><code>.env</code></td><td>Três <code>LANGSMITH_</code>. Sem mudança em <code>config.py</code>. A chave não vai para o git.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout co-ok">
+    <div class="ct">Intocado de propósito</div>
+    <p><code>index.html</code>, o contrato do <code>POST /chat</code>, prompts, tools, guardrail. O chat continua devolvendo texto. A operação ganhou outra porta.</p>
+  </div>
+</div>
+</div>
+
+<div class="slide" data-title="Conferência final">
+<div class="slide-inner slide-scroll">
+  <span class="gtag">checkpoint</span>
+  <h2 class="sec-title">Conferência <span style="color:var(--green)">final</span></h2>
+  <div class="final-check" id="final-checklist">
+    <div class="fc-item"><div class="fc-check">✓</div><div class="fc-text">1 · Sei a diferença: observar um caso, monitorar um limite</div></div>
+    <div class="fc-item"><div class="fc-check">✓</div><div class="fc-text">2 · Sei o que é SLO e por que bloqueio não entra na taxa de erro</div></div>
+    <div class="fc-item"><div class="fc-check">✓</div><div class="fc-text">3 · Colei observabilidade.py em app/</div></div>
+    <div class="fc-item"><div class="fc-check">✓</div><div class="fc-text">4 · Alterei import, orquestrador e executar_fluxo no graph.py</div></div>
+    <div class="fc-item"><div class="fc-check">✓</div><div class="fc-text">5 · Colei monitor.py e publiquei a rota no main.py</div></div>
+    <div class="fc-item"><div class="fc-check">✓</div><div class="fc-text">6 · Colei frontend/monitor.html e abri pelo localhost</div></div>
+    <div class="fc-item"><div class="fc-check">✓</div><div class="fc-text">7 · Uma pergunta de finanças mostra Gemini, Groq, tokens e custo</div></div>
+    <div class="fc-item"><div class="fc-check">✓</div><div class="fc-text">8 · “ignore as instrucoes” fica bloqueado e o SLO continua verde</div></div>
+    <div class="fc-item"><div class="fc-check">✓</div><div class="fc-text">9 · Liguei o LangSmith e abri o trace do mesmo turno</div></div>
+    <div class="fc-item"><div class="fc-check">✓</div><div class="fc-text">10 · Apontei no trace a latência, o modelo e os tokens da tela</div></div>
+    <div class="fc-item"><div class="fc-check">✓</div><div class="fc-text">11 · Sei nomear Prometheus, Grafana e uma alternativa ao LangSmith</div></div>
+  </div>
+  <div class="divider"></div>
+  <div class="bridge">
+    <h3 class="slide-h3" style="margin-bottom:10px;">O que fica para a próxima</h3>
+    <p style="color:var(--muted);font-size:.88rem;line-height:1.7;margin-bottom:14px;">Esta aula mediu se o sistema andou, em quanto tempo e por quanto. A próxima mede se a resposta prestou: alucinação, avaliação, o que fazer quando o texto vem convincente e errado.</p>
+    <div class="next-pills">
+      <div class="next-pill">observar</div>
+      <div class="next-pill">monitorar</div>
+      <div class="next-pill">SLO</div>
+      <div class="next-pill">custo</div>
+      <div class="next-pill">LangSmith</div>
+    </div>
+  </div>
+</div>
+</div>
+
+</div>
+
+<script>
+// ══════════════════════════ BG CANVAS ══════════════════════════
+const bgCanvas = document.getElementById('bg');
+const bgCtx = bgCanvas.getContext('2d');
+let BW, BH, nodes = [];
+function resizeBg() { BW = bgCanvas.width = window.innerWidth; BH = bgCanvas.height = window.innerHeight; }
+resizeBg(); window.addEventListener('resize', () => { resizeBg(); initNodes(); });
+function initNodes() {
+  nodes = [];
+  const n = Math.floor((BW * BH) / 18000);
+  for (let i = 0; i < n; i++) nodes.push({ x:Math.random()*BW, y:Math.random()*BH, vx:(Math.random()-.5)*.4, vy:(Math.random()-.5)*.4, r:Math.random()*2+1 });
+}
+initNodes();
+function drawBg() {
+  bgCtx.clearRect(0, 0, BW, BH);
+  nodes.forEach(n => { n.x += n.vx; n.y += n.vy; if(n.x<0||n.x>BW)n.vx*=-1; if(n.y<0||n.y>BH)n.vy*=-1; });
+  for (let i = 0; i < nodes.length; i++) for (let j = i+1; j < nodes.length; j++) {
+    const dx=nodes[i].x-nodes[j].x, dy=nodes[i].y-nodes[j].y, d=Math.sqrt(dx*dx+dy*dy);
+    if (d < 120) { bgCtx.beginPath(); bgCtx.moveTo(nodes[i].x,nodes[i].y); bgCtx.lineTo(nodes[j].x,nodes[j].y); bgCtx.strokeStyle=`rgba(124,58,237,${.15*(1-d/120)})`; bgCtx.lineWidth=.5; bgCtx.stroke(); }
+  }
+  nodes.forEach(n => { bgCtx.beginPath(); bgCtx.arc(n.x,n.y,n.r,0,Math.PI*2); bgCtx.fillStyle='rgba(0,229,255,.5)'; bgCtx.fill(); });
+  requestAnimationFrame(drawBg);
+}
+drawBg();
+
+// ══════════════════════════ SLIDE ENGINE ══════════════════════════
+const slideEls = Array.from(document.querySelectorAll('.slide'));
+const TOTAL = slideEls.length;
+let current = 0;
+let maxReached = 0;
+
+const progressBar = document.getElementById('progress-bar');
+const counter     = document.getElementById('slide-counter');
+const titleBar    = document.getElementById('slide-title-bar');
+const navPrev     = document.getElementById('nav-prev');
+const navNext     = document.getElementById('nav-next');
+const dotsEl      = document.getElementById('dots');
+
+slideEls.forEach((_, i) => {
+  const d = document.createElement('div'); d.className = 'dot'; d.onclick = () => goTo(i);
+  dotsEl.appendChild(d);
+});
+
+function goTo(n) {
+  if (n < 0 || n >= TOTAL) return;
+  slideEls.forEach((s, i) => {
+    s.classList.remove('active', 'prev');
+    if (i < n) s.classList.add('prev');
+  });
+  slideEls[n].classList.add('active');
+  current = n;
+  if (n > maxReached) maxReached = n;
+  updateUI();
+  onSlideEnter(current);
+}
+
+function updateUI() {
+  progressBar.style.width = ((current + 1) / TOTAL * 100) + '%';
+  counter.textContent = `${current + 1} / ${TOTAL}`;
+  titleBar.textContent = slideEls[current].dataset.title || '';
+  navPrev.classList.toggle('disabled', current === 0);
+  navNext.classList.toggle('disabled', current === TOTAL - 1);
+  document.querySelectorAll('.dot').forEach((d,i) => {
+    d.classList.toggle('active', i === current);
+    d.classList.toggle('done', i < current);
+  });
+}
+
+navPrev.onclick = () => goTo(current - 1);
+navNext.onclick = () => goTo(current + 1);
+document.addEventListener('keydown', e => {
+  if (e.target.closest('.code')) return;
+  if (e.key === 'ArrowRight' || e.key === 'ArrowDown') goTo(current + 1);
+  if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   goTo(current - 1);
+});
+requestAnimationFrame(() => goTo(0));
+
+const OBS_PASSOS = [
+  { lat: 400,  tok: 550,  custo: 0.00015, nota: 'aprovado\n0,4 s · 550 tok', rota: '—', status: 'em curso' },
+  { lat: 600,  tok: 1700, custo: 0.00032, nota: 'ROUTE=financeiro\n0,6 s · 1.700 tok', rota: 'financeiro', status: 'em curso' },
+  { lat: 3100, tok: 3000, custo: 0.00115, nota: 'especialista\n3,1 s · 3.000 tok', rota: 'financeiro', status: 'em curso' },
+  { lat: 500,  tok: 700,  custo: 0.00018, nota: 'texto final\n0,5 s · 700 tok', rota: 'financeiro', status: 'em curso' },
+  { lat: 400,  tok: 550,  custo: 0.00012, nota: 'ok\n0,4 s · 550 tok', rota: 'financeiro', status: 'ok' },
+];
+let obsTimers = [];
+
+function limparObs() {
+  obsTimers.forEach(clearTimeout);
+  obsTimers = [];
+}
+
+function obsDepois(ms, fn) {
+  obsTimers.push(setTimeout(fn, ms));
+}
+
+function fmtLat(ms) {
+  return (ms / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' s';
+}
+function fmtTok(n) {
+  return n.toLocaleString('pt-BR');
+}
+function fmtUsd(n) {
+  return n.toLocaleString('pt-BR', { style: 'currency', currency: 'USD', minimumFractionDigits: 4, maximumFractionDigits: 4 });
+}
+
+function posicionarPergunta(node) {
+  const q = document.getElementById('obs-q');
+  const stage = document.getElementById('obs-stage');
+  const nr = node.getBoundingClientRect();
+  const sr = stage.getBoundingClientRect();
+  const largura = q.offsetWidth || 180;
+  q.style.left = Math.max(0, nr.left - sr.left + nr.width / 2 - largura / 2) + 'px';
+  q.style.top = (nr.top - sr.top - 40) + 'px';
+}
+
+function tocarObservacao() {
+  limparObs();
+  const stage = document.getElementById('obs-stage');
+  const fluxo = document.getElementById('obs-flow');
+  const q = document.getElementById('obs-q');
+  if (!stage || !fluxo || !q) return;
+
+  stage.classList.remove('fechado');
+  q.classList.remove('show');
+  fluxo.querySelectorAll('.obs-node').forEach(n => {
+    n.classList.remove('on', 'done');
+    n.querySelector('.obs-nota').textContent = '';
+  });
+  document.getElementById('obs-lat').textContent = '—';
+  document.getElementById('obs-tok').textContent = '—';
+  document.getElementById('obs-custo').textContent = '—';
+  document.getElementById('obs-rota').textContent = '—';
+  document.getElementById('obs-status').textContent = '—';
+
+  const nos = Array.from(fluxo.querySelectorAll('.obs-node'));
+  requestAnimationFrame(() => posicionarPergunta(nos[0]));
+
+  obsDepois(280, () => {
+    q.classList.add('show');
+    posicionarPergunta(nos[0]);
+  });
+
+  let lat = 0, tok = 0, custo = 0;
+  OBS_PASSOS.forEach((passo, i) => {
+    const inicio = 900 + i * 1200;
+    obsDepois(inicio, () => {
+      nos.forEach((n, j) => n.classList.toggle('on', j === i));
+      posicionarPergunta(nos[i]);
+      lat += passo.lat;
+      tok += passo.tok;
+      custo += passo.custo;
+      nos[i].querySelector('.obs-nota').textContent = passo.nota;
+      document.getElementById('obs-lat').textContent = fmtLat(lat);
+      document.getElementById('obs-tok').textContent = fmtTok(tok);
+      document.getElementById('obs-custo').textContent = fmtUsd(custo);
+      document.getElementById('obs-rota').textContent = passo.rota;
+      document.getElementById('obs-status').textContent = passo.status;
+    });
+    obsDepois(inicio + 1000, () => {
+      nos[i].classList.remove('on');
+      nos[i].classList.add('done');
+    });
+  });
+
+  obsDepois(900 + OBS_PASSOS.length * 1200, () => {
+    nos.forEach(n => { n.classList.remove('on'); n.classList.add('done'); });
+    stage.classList.add('fechado');
+    document.getElementById('obs-status').textContent = 'ok';
+  });
+}
+
+document.getElementById('obs-replay').onclick = (e) => {
+  e.stopPropagation();
+  tocarObservacao();
+};
+
+function onSlideEnter(n) {
+  const title = slideEls[n].dataset.title;
+  if (title === 'Conferência final') {
+    const el = document.getElementById('final-checklist');
+    el.classList.remove('play');
+    void el.offsetWidth;
+    el.classList.add('play');
+  }
+  if (title === 'A observação em movimento') tocarObservacao();
+  else limparObs();
+}
+
+// ══════════════════════════ CÓDIGO ESCONDIDO ══════════════════════════
+function toggleCode(header) {
+  const wrap = header.parentElement;
+  const open = wrap.classList.toggle('open');
+  const btn = header.querySelector('.code-toggle-btn');
+  if (btn) btn.textContent = open ? 'Ocultar' : 'Clique para ver';
+}
+
+// ══════════════════════════ COPIAR CÓDIGO ══════════════════════════
+function copyCode(evento, botao) {
+  evento.stopPropagation();
+  const wrap = botao.closest('.code-wrap');
+  const texto = wrap.querySelector('.code').textContent;
+
+  const feedback = (ok) => {
+    botao.textContent = ok ? '✓ Copiado' : 'Falhou';
+    botao.classList.toggle('done', ok);
+    setTimeout(() => { botao.textContent = 'Copiar'; botao.classList.remove('done'); }, 1800);
+  };
+
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(texto).then(() => feedback(true), () => feedback(false));
+  } else {
+    const ta = document.createElement('textarea');
+    ta.value = texto;
+    ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    document.body.removeChild(ta);
+    feedback(ok);
+  }
+}
+</script>
+</body>
+</html>

@@ -6,7 +6,7 @@ from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from app.config import FAQ_PDF_PATH, GEMINI_API_KEY
 
 from langchain.tools import tool
-from app.vectorstore import qdrant, gerar_embedding, COLLECTION_FAQ
+from app.infra.vectorstore import qdrant, gerar_embedding, COLLECTION_FAQ
 
 
 @tool

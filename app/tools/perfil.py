@@ -16,11 +16,11 @@ from langchain_core.runnables import RunnableConfig
 
 from app.perfil import buscar_perfil_estruturado, buscar_restricoes
 
-
+# Função privada para extrair o user_id do RunnableConfig, retornando None se não houver.
 def _user_id(config: RunnableConfig) -> str | None:
     return (config or {}).get("configurable", {}).get("user_id")
 
-
+# Tool para consultar o perfil financeiro estruturado do usuário.
 @tool
 def consultar_perfil_financeiro(config: RunnableConfig) -> str:
     """Consulta o cadastro financeiro estruturado do usuário: renda mensal,
@@ -48,7 +48,7 @@ def consultar_perfil_financeiro(config: RunnableConfig) -> str:
         f"perfil_investidor: {perfil['perfil_investidor']}"
     )
 
-
+# Tool para buscar restrições do perfil financeiro do usuário com base em uma busca semântica.
 @tool
 def buscar_restricoes_perfil(busca: str, config: RunnableConfig) -> str:
     """Busca, entre as restrições que o usuário cadastrou na tela de perfil,

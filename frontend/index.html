@@ -8,7 +8,7 @@
   <title>AssessorIA — assistente</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -23,30 +23,15 @@
           </svg>
           <span class="header__dot" id="status-dot" aria-hidden="true"></span>
         </span>
-        <h1 class="brand__title">AssessorIA</h1>
+        <h1 class="brand__title">assistente <span>/ chat</span></h1>
       </div>
 
       <div class="header__meta">
         <code class="header__session" id="session-id">—</code>
-
-        <div class="theme-switcher">
-          <button class="header__icon-btn" id="theme-toggle" type="button" aria-label="Mudar tema de fundo" title="Mudar tema de fundo" aria-haspopup="true" aria-expanded="false">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M12 21a9 9 0 1 1 0-18c4.97 0 9 3.58 9 8 0 2.21-1.79 3-3.5 3H16a1.5 1.5 0 0 0-1.06 2.56c.4.4.56.9.56 1.44 0 1.1-1.34 2-3 2Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-              <circle cx="7.5" cy="10.5" r="1.15" fill="currentColor"/>
-              <circle cx="11" cy="6.8" r="1.15" fill="currentColor"/>
-              <circle cx="15.5" cy="8" r="1.15" fill="currentColor"/>
-            </svg>
-          </button>
-          <div class="theme-menu" id="theme-menu" role="menu" hidden>
-            <button class="theme-swatch" data-theme="gemini" type="button" role="menuitem" title="Gemini"></button>
-            <button class="theme-swatch" data-theme="aurora" type="button" role="menuitem" title="Aurora"></button>
-            <button class="theme-swatch" data-theme="sunset" type="button" role="menuitem" title="Sunset"></button>
-          </div>
-        </div>
-
+        <a class="nav-link" href="perfil.html">perfil</a>
+        <a class="nav-link" href="monitor.html">monitor</a>
         <button class="header__reset" id="reset-session" type="button" title="Encerrar a sessão atual e começar uma nova">
-          Nova conversa
+          nova conversa
         </button>
       </div>
     </header>
@@ -82,7 +67,6 @@
     <p class="console__disclaimer">AssessorIA pode cometer erros. Confirme informações importantes antes de decidir.</p>
   </div>
 
-  <script src="theme.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

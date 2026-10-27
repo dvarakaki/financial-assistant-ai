@@ -24,3 +24,9 @@ pypdf
 
 # Vetorização e Busca (FAISS)
 faiss-cpu
+
+# Google Calendar MCP (Etapa 5.2) — cliente MCP + OAuth Desktop
+httpx
+mcp
+google-auth
+google-auth-oauthlib

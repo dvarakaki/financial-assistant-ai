@@ -4,6 +4,7 @@ from app.routes.chat import router as chat_router
 from app.config import validar_config  
 from app.routes.sessions import router as sessions_router
 from app.routes.perfil import router as perfil_router
+from app.routes.monitor import router as monitor_router
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import FRONTEND_DIR
 
@@ -19,6 +20,7 @@ app = FastAPI(
 app.include_router(chat_router)
 app.include_router(sessions_router)
 app.include_router(perfil_router)
+app.include_router(monitor_router)
 @app.get("/health")
 def health() -> dict:
     problemas = validar_config()

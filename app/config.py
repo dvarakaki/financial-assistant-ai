@@ -15,10 +15,23 @@ load_dotenv(BASE_DIR / ".env")
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GROQ_API_KEY   = os.getenv("GROQ_API_KEY")
+# Juiz de fidelidade (etapa 7). Fora de OBRIGATORIAS: sem a chave o servidor
+# sobe e o juiz troca toda resposta pela frase fixa.
+TYPESAFE_API_KEY = os.getenv("TYPESAFE_API_KEY")
 DATABASE_URL   = os.getenv("DATABASE_URL")
 MONGODB_URI    = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
 QDRANT_URL     = os.getenv("QDRANT_URL")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
+
+GOOGLE_OAUTH_CREDENTIALS = os.getenv(
+    "GOOGLE_OAUTH_CREDENTIALS",
+    str(BASE_DIR / "gcp-oauth.keys.json"),
+)
+GOOGLE_CALENDAR_MCP_URL = os.getenv(
+    "GOOGLE_CALENDAR_MCP_URL",
+    "https://calendarmcp.googleapis.com/mcp/v1",
+)
+GOOGLE_CALENDAR_ACCESS_TOKEN = os.getenv("GOOGLE_CALENDAR_ACCESS_TOKEN")
 
 OBRIGATORIAS = {
     "GEMINI_API_KEY": GEMINI_API_KEY,

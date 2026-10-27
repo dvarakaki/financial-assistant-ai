@@ -7,6 +7,7 @@ SAÍDA    → redigir PII → desanonimizar → revisar compliance (LLM)
 import re
 import uuid
 from app.llms import llm_rapido
+from app.observabilidade import no_atual
 
 # ==============================================================================
 # PII — padrões usados tanto na entrada quanto na saída
@@ -128,7 +129,8 @@ def guardrail_entrada(mensagem_anonimizada):
             return _bloquear("acesso_dados_internos", "Não tenho como compartilhar informações internas do sistema.")
 
     # 3. Classificação semântica via LLM (ofensivo, perigoso, ilícito, político, indicação)
-    resposta = llm_rapido.invoke(_PROMPT_CLASSIFICADOR.format(mensagem=mensagem_anonimizada)).content
+    with no_atual("guardrail_entrada"):
+        resposta = llm_rapido.invoke(_PROMPT_CLASSIFICADOR.format(mensagem=mensagem_anonimizada)).content
 
     categoria = "APROVADO"
     for linha in resposta.splitlines():
@@ -173,7 +175,8 @@ def guardrail_saida(resposta, mapa_pii, restaurar_pii=False):
     resposta = desanonimizar_saida(resposta, mapa_pii, restaurar=restaurar_pii)
 
     # 3. Revisão de compliance financeiro
-    saida = llm_rapido.invoke(_PROMPT_COMPLIANCE.format(resposta=resposta)).content.strip()
+    with no_atual("guardrail_saida"):
+        saida = llm_rapido.invoke(_PROMPT_COMPLIANCE.format(resposta=resposta)).content.strip()
     if "RESPOSTA:" in saida:
         resposta = saida.split("RESPOSTA:", 1)[1].strip() or resposta
 

@@ -4,7 +4,7 @@ Script de ingestão do FAQ no Qdrant.
 Lê o PDF, faz split em chunks, gera embeddings e insere na collection
 "faq_chunks" do Qdrant. Deve ser executado UMA VEZ (ou sempre que o PDF mudar):
 
-    python -m app.ingest_faq
+    python -m scripts.ingest_faq
 
 Ele limpa a collection antes de reinserir, então é seguro rodar várias vezes.
 """
@@ -15,7 +15,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from qdrant_client import models
 
 from app.config import FAQ_PDF_PATH
-from app.vectorstore import qdrant, gerar_embeddings_batch, COLLECTION_FAQ
+from app.infra.vectorstore import qdrant, gerar_embeddings_batch, COLLECTION_FAQ
 
 CHUNK_SIZE    = 700
 CHUNK_OVERLAP = 150

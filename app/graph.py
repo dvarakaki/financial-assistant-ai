@@ -2,6 +2,7 @@
 import re
 from langchain.agents import create_agent
 from app.guardrail import anonimizar_entrada, guardrail_entrada, guardrail_saida
+from app.juiz import julgar
 from app.llms import llm_especialista, llm_rapido
 # Só salvar_mensagem entra aqui. iniciar_sessao() é chamada por ela mesma, e
 # encerrar_sessao() mudou de camada: virou POST /sessions/{id}/encerrar, em
@@ -9,6 +10,7 @@ from app.llms import llm_especialista, llm_rapido
 # conversa é evento de outra natureza, disparado pelo usuário — não por uma
 # pergunta.
 from app.memory import salvar_mensagem
+from app.observabilidade import abrir_turno, fechar_turno, no_atual
 from app.prompts import (
     AGENDA_PROMPT_COMPLETO,
     FAQ_PROMPT,
@@ -16,6 +18,8 @@ from app.prompts import (
     ORQUESTRADOR_PROMPT_COMPLETO,
     ROUTER_PROMPT_COMPLETO,
 )
+from app.tools.agenda import TOOLS_AGENDA
+from app.tools.calendario_google import TOOLS_GOOGLE
 from app.tools.faq import faq_retriever
 from app.tools.financeiro import TOOLS
 from app.tools.memoria import TOOLS_MEMORIA
@@ -54,7 +58,7 @@ financeiro_agent = create_agent(
 )
 agenda_agent = create_agent(
     model=llm_especialista,
-    tools=TOOLS_MEMORIA,
+    tools=TOOLS_AGENDA + TOOLS_GOOGLE + TOOLS_MEMORIA,
     system_prompt=AGENDA_PROMPT_COMPLETO,
 )
 faq_agent = create_agent(
@@ -70,62 +74,91 @@ def _texto(resposta) -> str:
     return re.sub(r"<think>.*?</think>\s*", "", texto, flags=re.DOTALL).strip()
 
 
-def _identificar_rota(pergunta: str, config: dict) -> tuple[str, str]:
-    resultado = router_agent.invoke(
-        {"messages": [{"role": "user", "content": pergunta}]},
-        config=config,
-    )
-    resposta = _texto(resultado["messages"][-1])
+def _identificar_rota(pergunta: str, config: dict) -> tuple[str, str, list]:
+    with no_atual("roteador"):
+        resultado = router_agent.invoke(
+            {"messages": [{"role": "user", "content": pergunta}]},
+            config=config,
+        )
+    mensagens = resultado["messages"]
+    resposta = _texto(mensagens[-1])
     for linha in resposta.splitlines():
         if linha.strip().startswith("ROUTE="):
             rota = linha.split("=", 1)[1].strip().lower()
             if rota in {"financeiro", "agenda", "faq"}:
-                return rota, ""
-    return "direta", resposta
+                return rota, "", mensagens
+    return "direta", resposta, mensagens
 
 
-def _responder(rota: str, pergunta: str, config: dict) -> str:
+def _responder(rota: str, pergunta: str, config: dict) -> tuple[str, list]:
     if rota == "financeiro":
-        resultado = financeiro_agent.invoke(
-            {"messages": [{"role": "user", "content": pergunta}]}, config=config
-        )
+        with no_atual("financeiro"):
+            resultado = financeiro_agent.invoke(
+                {"messages": [{"role": "user", "content": pergunta}]}, config=config
+            )
         resposta = _texto(resultado["messages"][-1])
+        mensagens = resultado["messages"]
     elif rota == "faq":
-        resultado = faq_agent.invoke({
-            "messages": [{"role": "user", "content": pergunta}]
-        })
+        with no_atual("faq"):
+            resultado = faq_agent.invoke({
+                "messages": [{"role": "user", "content": pergunta}]
+            })
         resposta = _texto(resultado["messages"][-1])
+        mensagens = resultado["messages"]
     else:
-        resultado = agenda_agent.invoke(
-            {"messages": [{"role": "user", "content": pergunta}]}, config=config
-        )
+        with no_atual("agenda"):
+            resultado = agenda_agent.invoke(
+                {"messages": [{"role": "user", "content": pergunta}]}, config=config
+            )
         resposta = _texto(resultado["messages"][-1])
+        mensagens = resultado["messages"]
 
     if rota in {"financeiro", "agenda"}:
-        resposta = _texto(llm_rapido.invoke(
-            f"{ORQUESTRADOR_PROMPT_COMPLETO}\n\nResposta do especialista:\n{resposta}"
-        ))
-    return resposta
+        with no_atual("orquestrador"):
+            resposta = _texto(llm_rapido.invoke(
+                f"{ORQUESTRADOR_PROMPT_COMPLETO}\n\nResposta do especialista:\n{resposta}"
+            ))
+    return resposta, mensagens
+
 
 def executar_fluxo_assessor(
     pergunta_usuario: str, session_id: str, user_id: str = "usuario_teste"
 ) -> str:
-    pergunta_usuario_anonimizado, mapa_pii = anonimizar_entrada(pergunta_usuario)
+    # O registro abre antes de qualquer chamada de modelo e fecha no finally,
+    # inclusive quando algo levanta exceção no meio do fluxo. A rota /monitor
+    # só lê o que ficou anotado aqui.
+    turno_id = abrir_turno()
+    status = "erro"
+    rota = ""
+    try:
+        pergunta_usuario_anonimizado, mapa_pii = anonimizar_entrada(pergunta_usuario)
 
-    verificacao = guardrail_entrada(pergunta_usuario_anonimizado)
-    if verificacao["bloqueado"]:
-        resposta = verificacao["mensagem"]
+        verificacao = guardrail_entrada(pergunta_usuario_anonimizado)
+        if verificacao["bloqueado"]:
+            resposta = verificacao["mensagem"]
+            status = "bloqueado"
+            salvar_mensagem(session_id, "human",     pergunta_usuario_anonimizado, user_id=user_id)
+            salvar_mensagem(session_id, "assistant", resposta, user_id=user_id)
+            return resposta
+
+        config = {"configurable": {"thread_id": session_id, "user_id": user_id}}
+        rota, resposta_direta, msgs_roteador = _identificar_rota(pergunta_usuario, config)
+        if rota == "direta":
+            resposta, msgs_especialista = resposta_direta, []
+        else:
+            resposta, msgs_especialista = _responder(rota, pergunta_usuario, config)
+
+        resposta = guardrail_saida(resposta, mapa_pii)["conteudo"]
+
+        # O juiz fala por último, inclusive no FAQ: a evidência é o que as
+        # tools devolveram neste turno (roteador + especialista).
+        with no_atual("juiz"):
+            resposta = julgar(pergunta_usuario, resposta, [*msgs_roteador, *msgs_especialista])
+
         salvar_mensagem(session_id, "human",     pergunta_usuario_anonimizado, user_id=user_id)
         salvar_mensagem(session_id, "assistant", resposta, user_id=user_id)
+
+        status = "ok"
         return resposta
-
-    config = {"configurable": {"thread_id": session_id, "user_id": user_id}}
-    rota, resposta_direta = _identificar_rota(pergunta_usuario, config)
-    resposta = resposta_direta if rota == "direta" else _responder(rota, pergunta_usuario, config)
-
-    resposta = guardrail_saida(resposta, mapa_pii)["conteudo"]
-
-    salvar_mensagem(session_id, "human",     pergunta_usuario_anonimizado, user_id=user_id)
-    salvar_mensagem(session_id, "assistant", resposta, user_id=user_id)
-
-    return resposta
+    finally:
+        fechar_turno(turno_id, session_id=session_id, rota=rota, status=status)

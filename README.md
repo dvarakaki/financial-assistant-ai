@@ -51,21 +51,30 @@ Cada agente é montado com `langchain.agents.create_agent`; os especialistas fin
 ## Estrutura do projeto
 
 ```
-migracao_fastAPI/
+fastAPI/
 ├── app/
-│   ├── main.py           # instancia o FastAPI, CORS, rotas e serve o frontend
-│   ├── graph.py           # monta os agentes e o fluxo de uma pergunta (executar_fluxo_assessor)
-│   ├── guardrail.py       # anonimização de PII, guardrails de entrada e saída
-│   ├── memory.py          # ciclo de vida da sessão no MongoDB (iniciar/salvar/encerrar/recuperar)
-│   ├── llms.py            # instâncias dos modelos (Gemini, Groq) e fallback
-│   ├── prompts.py         # prompts e few-shots de cada agente
-│   ├── schemas.py         # contratos Pydantic da API
-│   ├── routes/            # chat.py (POST /chat) e sessions.py (ciclo de vida da sessão)
-│   └── tools/             # financeiro.py (Postgres), faq.py (RAG), memoria.py (busca histórico)
-├── frontend/               # chat estático (HTML/CSS/JS puro, sem build step)
-├── data/                   # PDF usado pela tool de FAQ
-├── docs/                   # material de referência/estudo da migração
-├── schema.sql              # schema do Postgres (tabelas + seeds)
+│   ├── main.py             # instancia o FastAPI, CORS, rotas e serve o frontend
+│   ├── config.py           # único lugar que lê o .env
+│   ├── llms.py             # instâncias dos modelos (Gemini, Groq) e fallback
+│   ├── graph.py            # monta os agentes e o fluxo de uma pergunta (executar_fluxo_assessor)
+│   ├── guardrail.py        # anonimização de PII, guardrails de entrada e saída
+│   ├── memory.py           # ciclo de vida da sessão no MongoDB (iniciar/salvar/encerrar/recuperar)
+│   ├── perfil.py           # domínio do perfil financeiro (Mongo + Qdrant)
+│   ├── prompts.py          # prompts e few-shots de cada agente
+│   ├── schemas.py          # contratos Pydantic da API
+│   ├── infra/              # clientes de storage externo, reaproveitados por várias tools
+│   │   ├── db.py           # get_conn() — Postgres
+│   │   └── vectorstore.py  # cliente Qdrant + embeddings
+│   ├── routes/             # chat.py, sessions.py, perfil.py — cada rota só chama o domínio
+│   └── tools/              # financeiro.py, agenda.py, calendario_google.py (MCP),
+│                           # faq.py, memoria.py, perfil.py
+├── scripts/
+│   └── ingest_faq.py       # roda uma vez (ou quando o PDF mudar): python -m scripts.ingest_faq
+├── frontend/                # chat estático (HTML/CSS/JS puro, sem build step)
+├── data/                    # PDF usado pela tool de FAQ
+├── docs/
+│   └── roteiros/            # HTML das aulas/etapas — material de estudo, não roda no servidor
+├── schema.sql               # schema do Postgres (tabelas + seeds)
 ├── requirements.txt
 └── .env.example
 ```
