@@ -2,7 +2,8 @@
 import re
 from langchain.agents import create_agent
 from app.guardrail import anonimizar_entrada, guardrail_entrada, guardrail_saida
-from app.juiz import julgar
+from app.infra.db import TransacaoTurno
+from app.juiz import FRASE_SEGURA, julgar
 from app.llms import llm_especialista, llm_rapido
 # Só salvar_mensagem entra aqui. iniciar_sessao() é chamada por ela mesma, e
 # encerrar_sessao() mudou de camada: virou POST /sessions/{id}/encerrar, em
@@ -130,6 +131,10 @@ def executar_fluxo_assessor(
     turno_id = abrir_turno()
     status = "erro"
     rota = ""
+    # Toda escrita no Postgres deste turno (add_transaction, update_transaction,
+    # add_event) fica nesta transação, sem commit, até o veredito do juiz.
+    # As tools a recebem pelo RunnableConfig, como o user_id.
+    transacao = TransacaoTurno()
     try:
         pergunta_usuario_anonimizado, mapa_pii = anonimizar_entrada(pergunta_usuario)
 
@@ -141,7 +146,9 @@ def executar_fluxo_assessor(
             salvar_mensagem(session_id, "assistant", resposta, user_id=user_id)
             return resposta
 
-        config = {"configurable": {"thread_id": session_id, "user_id": user_id}}
+        config = {"configurable": {
+            "thread_id": session_id, "user_id": user_id, "transacao": transacao,
+        }}
         rota, resposta_direta, msgs_roteador = _identificar_rota(pergunta_usuario, config)
         if rota == "direta":
             resposta, msgs_especialista = resposta_direta, []
@@ -155,10 +162,19 @@ def executar_fluxo_assessor(
         with no_atual("juiz"):
             resposta = julgar(pergunta_usuario, resposta, [*msgs_roteador, *msgs_especialista])
 
+        # A fronteira da etapa 8: a escrita só permanece se o juiz aprovou.
+        # julgar() devolve a resposta original ou FRASE_SEGURA — esta cobre
+        # recusa, juiz sem chave, erro HTTP e timeout. Resposta vazia não foi
+        # julgada, então também não confirma. Sem confirmar, o finally fecha
+        # a conexão e o Postgres descarta o que as tools gravaram.
+        if resposta.strip() and resposta != FRASE_SEGURA:
+            transacao.confirmar()
+
         salvar_mensagem(session_id, "human",     pergunta_usuario_anonimizado, user_id=user_id)
         salvar_mensagem(session_id, "assistant", resposta, user_id=user_id)
 
         status = "ok"
         return resposta
     finally:
+        transacao.fechar()
         fechar_turno(turno_id, session_id=session_id, rota=rota, status=status)

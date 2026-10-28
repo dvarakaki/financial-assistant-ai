@@ -1,11 +1,13 @@
 from typing import Optional, List
 
 from langchain.tools import tool
+from langchain_core.runnables import RunnableConfig
 from pydantic import BaseModel, Field
 
 # A conexão com o Postgres agora vem de um lugar só (antes era uma get_conn()
-# local, idêntica à de financeiro.py).
-from app.infra.db import get_conn
+# local, idêntica à de financeiro.py). A escrita usa a transação do turno, que
+# só é confirmada depois do juiz — ver TransacaoTurno em app/infra/db.py.
+from app.infra.db import get_conn, transacao_do_turno
 
 
 class AddEventArgs(BaseModel):
@@ -28,23 +30,22 @@ def add_event(
     end_time: Optional[str] = None,
     location: Optional[str] = None,
     notes: Optional[str] = None,
+    config: RunnableConfig = None,
 ) -> dict:
     """Insere um evento/compromisso na agenda (tabela events) do banco de dados Postgres."""
-    conn = get_conn()
-    cur = conn.cursor()
     try:
-        cur.execute(
-            """
-            INSERT INTO events
-                (title, start_time, end_time, location, notes, source_text)
-            VALUES
-                (%s, %s::timestamptz, %s::timestamptz, %s, %s, %s)
-            RETURNING id, start_time, end_time;
-            """,
-            (title, start_time, end_time, location, notes, source_text),
-        )
-        new_id, start, end = cur.fetchone()
-        conn.commit()
+        with transacao_do_turno(config).escrita() as cur:
+            cur.execute(
+                """
+                INSERT INTO events
+                    (title, start_time, end_time, location, notes, source_text)
+                VALUES
+                    (%s, %s::timestamptz, %s::timestamptz, %s, %s, %s)
+                RETURNING id, start_time, end_time;
+                """,
+                (title, start_time, end_time, location, notes, source_text),
+            )
+            new_id, start, end = cur.fetchone()
         return {
             "status": "ok",
             "id": new_id,
@@ -53,14 +54,7 @@ def add_event(
             "end_time": str(end) if end else None,
         }
     except Exception as e:
-        conn.rollback()
         return {"status": "error", "message": str(e)}
-    finally:
-        try:
-            cur.close()
-            conn.close()
-        except Exception:
-            pass
 
 
 #############
