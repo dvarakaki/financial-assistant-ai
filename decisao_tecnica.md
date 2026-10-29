@@ -90,22 +90,65 @@ Mecanismo resumido: a decisão troca "uma conexão por tool, com commit imediato
 
 ### Evidência
 
-Procedimento por tool, com um marcador único por tentativa (por exemplo `TESTE8-<sufixo>`) no texto do usuário:
+Executamos os testes com o servidor real (Postgres, Mongo e Qdrant conectados), um marcador único por tentativa (`TESTE8-<sufixo>`) escrito na própria mensagem. Para cada tentativa, consultamos o Postgres com um script auxiliar local (fora do repositório) que faz `SELECT ... WHERE source_text ILIKE '%<marcador>%'` em `transactions` e `events`, e copiamos a linha `[juiz]` do terminal do servidor.
 
-1. Estado antes: `SELECT * FROM transactions WHERE source_text ILIKE '%TESTE8-<sufixo>%';` (ou `events`).
-2. Enviar a mensagem pelo chat e copiar a linha `[juiz] ...` do terminal do uvicorn.
-3. Estado depois: a mesma consulta.
+- **Recusa:** servidor iniciado com `TYPESAFE_API_KEY` comentada no `.env`. O juiz cai em `sem_chave`, devolve a frase segura e o turno é recusado de forma reproduzível.
+- **Aprovação:** servidor iniciado com a chave configurada.
 
-Recusa forçada e reproduzível: subir o servidor sem `TYPESAFE_API_KEY` (log `[juiz] sem_chave`) ou usar o caso da compra em dólares. Aprovação: com a chave, um pedido simples em reais.
+| # | Tool | Cenário | Marcador | Log `[juiz]` | Chat | Banco depois |
+|---|---|---|---|---|---|---|
+| 1 | add_transaction | recusado | `TESTE8-r3` | `sem_chave` | "Não tenho evidência para afirmar isso." | `transactions: 0 linha(s)` |
+| 2 | add_event | recusado | `TESTE8-r4` | `sem_chave` | "Não tenho evidência para afirmar isso." | `events: 0 linha(s)` |
+| 3 | update_transaction | recusado (99 sobre linha existente) | `TESTE8-r1` | `sem_chave` | "Não tenho evidência para afirmar isso." | linha id 3 **continua com 30.00** |
+| 4 | add_transaction | aprovado | `TESTE8-r1` | `apoiada noul=0.92` | "Lancei R$ 30,00 em 'comida' referente a mercado hoje via Pix." | **1 linha**: `(3, 30.00, 'mercado TESTE8-r1')` |
+| 5 | add_event | aprovado | `TESTE8-a2` | `apoiada noul=0.77` | "Agendei 'Reunião TESTE8-a2' para sexta-feira, 30/10/2026, das 10:00 às 11:00." | **1 linha**: `(2, 'Reunião TESTE8-a2', 2026-10-30 13:00 UTC)` |
+| 6 | update_transaction | aprovado | — | — | — | **não executado nesta rodada** |
 
-| Tool | Cenário | Marcador | Antes | Log `[juiz]` | Depois |
-|---|---|---|---|---|---|
-| add_transaction | recusado | _preencher_ | 0 linhas | _preencher_ | 0 linhas |
-| add_transaction | aprovado | _preencher_ | 0 linhas | _preencher_ | 1 linha |
-| update_transaction | recusado (sobre linha já aprovada) | _preencher_ | valor original | _preencher_ | valor original |
-| update_transaction | aprovado | _preencher_ | valor original | _preencher_ | valor novo, 1 vez |
-| add_event | recusado | _preencher_ | 0 linhas | _preencher_ | 0 linhas |
-| add_event | aprovado | _preencher_ | 0 linhas | _preencher_ | 1 linha |
+O caso 6 (alteração aprovada) não foi executado. A garantia de "aprova → confirma uma vez" para a alteração segue o mesmo caminho do `add_transaction` e do `add_event` (todas passam por `TransacaoTurno.confirmar()`), mas ela não tem evidência própria neste documento.
+
+#### Recusa sem efeito (casos 1, 2 e 3)
+
+O chat mostrou a frase segura nas três tentativas, com o marcador visível nas mensagens:
+
+![Chat: três tentativas recusadas](docs/evidencias/02-recusa-chat-3-tools.png)
+
+O terminal do servidor registrou um `[juiz] sem_chave` para cada `POST /chat`:
+
+![Terminal: três logs sem_chave](docs/evidencias/03-recusa-log-juiz.png)
+
+E o banco ficou como estava antes do turno: nenhuma linha para `TESTE8-r3` e `TESTE8-r4`, e a linha `TESTE8-r1` ainda com `30.00` depois do pedido de 99:
+
+![Banco: nada permaneceu](docs/evidencias/04-recusa-banco.png)
+
+No caso 3, o valor original da linha (30.00) é o gravado no caso 4.
+
+#### Aprovação uma única vez (casos 4 e 5)
+
+`add_transaction` (marcador `TESTE8-r1`). O log do servidor nesse turno foi `[juiz] apoiada noul=0.92`, e a consulta ao banco depois mostrou exatamente uma linha:
+
+```
+transactions: 1 linha(s)
+    (3, Decimal('30.00'), 'mercado TESTE8-r1', 'gastei 30 reais no mercado hoje no pix TESTE8-r1')
+events: 0 linha(s)
+```
+
+![Chat: add_transaction aprovado](docs/evidencias/01-add_transaction-aprovado-chat.png)
+
+`add_event` (marcador `TESTE8-a2`):
+
+![Chat: add_event aprovado](docs/evidencias/05-add_event-aprovado-chat.png)
+
+![Terminal: juiz apoiada noul=0.77](docs/evidencias/06-add_event-aprovado-log-juiz.png)
+
+![Banco: um único evento](docs/evidencias/07-add_event-aprovado-banco.png)
+
+#### O INSERT recusado rodou e foi desfeito
+
+Um professor pode perguntar se o banco ficou vazio porque a correção funciona ou porque o modelo nem chamou a tool. O `add_event` aprovado nasceu com **id 2**, e uma consulta a `events` mostrou que só existe essa linha (`[(2, 'Reunião TESTE8-a2')]`). O id 1 foi consumido e não existe: isso é compatível com o `INSERT` do `TESTE8-r4`, que a tool executou e a transação descartou, já que o `BIGSERIAL` não devolve o número quando há rollback. Não vimos a tabela antes dos testes, então tratamos isso como indício consistente, não como prova isolada.
+
+#### Observação sobre o Google Calendar
+
+No caso 5 o chat acrescentou que a sincronização com o Google Calendar falhou. Isso é esperado: o token do Google não está configurado neste ambiente e `add_google_event` está fora do escopo (ver acima). A falha não afeta o evento no Postgres, que foi confirmado.
 
 ## 5. Arquivos
 
@@ -114,6 +157,15 @@ Recusa forçada e reproduzível: subir o servidor sem `TYPESAFE_API_KEY` (log `[
 | Arquivo |
 |---|
 | `decisao_tecnica.md` |
+| `docs/evidencias/01-add_transaction-aprovado-chat.png` |
+| `docs/evidencias/02-recusa-chat-3-tools.png` |
+| `docs/evidencias/03-recusa-log-juiz.png` |
+| `docs/evidencias/04-recusa-banco.png` |
+| `docs/evidencias/05-add_event-aprovado-chat.png` |
+| `docs/evidencias/06-add_event-aprovado-log-juiz.png` |
+| `docs/evidencias/07-add_event-aprovado-banco.png` |
+
+Os PNGs são os prints da evidência da seção 4 (nenhum código novo).
 
 ### Modificados
 
